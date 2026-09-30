@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, StyleSheet, Platform, ViewStyle, StyleProp, TextStyle } from 'react-native';
+import { StyleSheet, Platform, ViewStyle, StyleProp, TextStyle, Pressable } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useTheme } from '@/hooks/useTheme';
 import { radius } from '@/theme/colors';
 
@@ -37,13 +37,6 @@ export function LiquidGlassButton({
     opacity: 1 - pressed.value * 0.1,
   }));
 
-  const handlePressIn = () => {
-    pressed.value = withSpring(1, { damping: 20, stiffness: 400 });
-  };
-  const handlePressOut = () => {
-    pressed.value = withSpring(0, { damping: 20, stiffness: 400 });
-  };
-
   const sizeStyles = {
     sm: { paddingVertical: 8, paddingHorizontal: 16, fontSize: 13 },
     md: { paddingVertical: 12, paddingHorizontal: 20, fontSize: 15 },
@@ -53,14 +46,10 @@ export function LiquidGlassButton({
   const getGradient = (): [string, string] => {
     if (disabled) return [colors.bgTertiary, colors.bgTertiary];
     switch (variant) {
-      case 'primary':
-        return [colors.primary, colors.primaryDark];
-      case 'secondary':
-        return [colors.secondary, colors.secondary];
-      case 'danger':
-        return [colors.error, colors.error];
-      case 'ghost':
-        return ['transparent', 'transparent'];
+      case 'primary':   return [colors.primary, colors.primaryDark];
+      case 'secondary': return [colors.secondary, colors.secondary];
+      case 'danger':    return [colors.error, colors.error];
+      case 'ghost':     return ['transparent', 'transparent'];
     }
   };
 
@@ -75,74 +64,59 @@ export function LiquidGlassButton({
       style={[
         styles.wrapper,
         fullWidth && { width: '100%' },
-        /* shadow removed for flat look */
         animatedStyle,
         style,
       ]}
-      onStartShouldSetResponder={() => !disabled}
-      onTouchStart={handlePressIn}
-      onTouchEnd={handlePressOut}
-      onTouchCancel={handlePressOut}
-      onResponderRelease={() => !disabled && onPress()}
     >
-      <View style={[styles.container, { borderColor: variant === 'ghost' ? colors.border : colors.glassBorder }]}>
-        {Platform.OS === 'ios' && variant !== 'ghost' && (
-          <BlurView
-            intensity={30}
-            tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
-          />
-        )}
-        {variant !== 'ghost' && (
+      <Pressable
+        onPress={disabled ? undefined : onPress}
+        onPressIn={() => { pressed.value = withSpring(1, { damping: 20, stiffness: 400 }); }}
+        onPressOut={() => { pressed.value = withSpring(0, { damping: 20, stiffness: 400 }); }}
+        disabled={disabled}
+        android_ripple={{ color: colors.glassHighlight, borderless: false }}
+        style={styles.pressable}
+      >
+        <Animated.View style={[styles.container, { borderColor: variant === 'ghost' ? colors.border : colors.glassBorder }]}>
+          {Platform.OS === 'ios' && variant !== 'ghost' && (
+            <BlurView intensity={30} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+          )}
+          {variant !== 'ghost' && (
+            <LinearGradient
+              colors={getGradient()}
+              style={StyleSheet.absoluteFill}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+            />
+          )}
           <LinearGradient
-            colors={getGradient()}
-            style={StyleSheet.absoluteFill}
+            colors={[colors.glassHighlight, 'transparent']}
+            style={styles.topHighlight}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
           />
-        )}
-        <LinearGradient
-          colors={[colors.glassHighlight, 'transparent']}
-          style={styles.topHighlight}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-        />
-        <Animated.View style={[styles.content, sizeStyles[size]]}>
-          {icon && <View style={styles.iconWrap}>{icon}</View>}
-          <Animated.Text
-            style={[
-              styles.text,
-              { color: getTextColor(), fontSize: sizeStyles[size].fontSize },
-              textStyle,
-            ]}
-          >
-            {title}
-          </Animated.Text>
+          <Animated.View style={[styles.content, sizeStyles[size]]}>
+            {icon}
+            <Animated.Text
+              style={[
+                styles.text,
+                { color: getTextColor(), fontSize: sizeStyles[size].fontSize },
+                textStyle,
+              ]}
+            >
+              {title}
+            </Animated.Text>
+          </Animated.View>
         </Animated.View>
-      </View>
+      </Pressable>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  container: {
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    borderWidth: 1,
-    position: 'relative',
-  },
-  topHighlight: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 24,
-    opacity: 0.3,
-  },
+  wrapper: { borderRadius: radius.md, overflow: 'hidden' },
+  pressable: { width: '100%' },
+  container: { borderRadius: radius.md, overflow: 'hidden', borderWidth: 1, position: 'relative' },
+  topHighlight: { position: 'absolute', top: 0, left: 0, right: 0, height: 24, opacity: 0.3 },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -150,11 +124,5 @@ const styles = StyleSheet.create({
     gap: 8,
     zIndex: 1,
   },
-  iconWrap: {
-    marginRight: 2,
-  },
-  text: {
-    fontFamily: 'Cairo-Bold',
-    textAlign: 'center',
-  },
+  text: { fontFamily: 'Cairo-Bold', textAlign: 'center', includeFontPadding: false },
 });

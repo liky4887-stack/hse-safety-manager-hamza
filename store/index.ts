@@ -13,6 +13,8 @@ import type {
   ReportLocation,
 } from '@/types';
 import { DEPARTMENTS } from '@/config/departments';
+import { supabase } from '@/lib/supabase';
+import { uploadImage } from '@/lib/uploadImage';
 
 const STORAGE_KEYS = {
   user: '@hse_user',
@@ -60,7 +62,33 @@ interface AppState {
   addNotification: (notif: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
+  clearAllNotifications: () => Promise<void>;
   getUnreadCount: () => number;
+}
+
+
+async function syncReportToSupabase(report: Report, user: User): Promise<void> {
+  try {
+    let imageUrl: string | null = null;
+    if (report.photoUri) {
+      imageUrl = await uploadImage(report.photoUri, 'reports');
+    }
+    const supabaseType = report.type === 'safe' ? 'safe' : report.category === 'act' ? 'unsafe_act' : 'unsafe_condition';
+    const { error } = await supabase.from('hse_reports').insert({
+      client_id: report.id, type: supabaseType, note: report.description,
+      corrective_action: report.correctiveAction ?? null, image_url: imageUrl,
+      department: report.department ?? null, subcategory: report.subcategory ?? null,
+      status: report.status, priority: report.priority ?? null,
+      created_by: user.id, created_by_name: user.name,
+      location_lat: report.location?.latitude ?? null,
+      location_lng: report.location?.longitude ?? null,
+      location_address: report.location?.address ?? null,
+      created_at: report.createdAt,
+    });
+    if (error) console.error('[sync] insert failed:', error);
+    else console.log('[sync] pushed to Supabase:', report.id);
+  } catch (err) { console.error('[sync] unexpected:', err); }
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -179,6 +207,8 @@ export const useStore = create<AppState>((set, get) => ({
       });
     }
 
+    void syncReportToSupabase(report, user);
+
     return report;
   },
 
@@ -268,6 +298,17 @@ export const useStore = create<AppState>((set, get) => ({
     const notifications = get().notifications.map((n) => ({ ...n, read: true }));
     await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
     set({ notifications });
+  },
+
+  deleteNotification: async (id) => {
+    const notifications = get().notifications.filter((n) => n.id !== id);
+    await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
+    set({ notifications });
+  },
+
+  clearAllNotifications: async () => {
+    await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify([]));
+    set({ notifications: [] });
   },
 
   getUnreadCount: () => get().notifications.filter((n) => !n.read).length,

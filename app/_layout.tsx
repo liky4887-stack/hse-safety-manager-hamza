@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import {
@@ -19,8 +19,10 @@ export default function RootLayout() {
   useFrameworkReady();
   const init = useStore((s) => s.init);
   const initialized = useStore((s) => s.initialized);
-  const language = useStore((s) => s.language);
+  const user = useStore((s) => s.user);
   const { rtl } = useI18n();
+  const router = useRouter();
+  const segments = useSegments();
 
   const [fontsLoaded, fontError] = useFonts({
     'Cairo-Regular': Cairo_400Regular,
@@ -29,9 +31,7 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-    }
+    if (fontsLoaded || fontError) SplashScreen.hideAsync();
   }, [fontsLoaded, fontError]);
 
   useEffect(() => {
@@ -41,6 +41,17 @@ export default function RootLayout() {
   useEffect(() => {
     I18nManager.forceRTL(rtl);
   }, [rtl]);
+
+  // Auth gate: redirect based on user presence once state has hydrated
+  useEffect(() => {
+    if (!initialized) return;
+    const onLogin = segments[0] === 'login';
+    if (user && onLogin) {
+      router.replace('/(tabs)');
+    } else if (!user && !onLogin) {
+      router.replace('/login');
+    }
+  }, [initialized, user, segments, router]);
 
   if (!initialized || (!fontsLoaded && !fontError)) {
     return null;

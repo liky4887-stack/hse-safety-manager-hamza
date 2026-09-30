@@ -2,8 +2,6 @@ import React from 'react';
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Bell, BellOff, CheckCheck, FileText } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { useI18n } from '@/hooks/useI18n';
 import { useStore } from '@/store';
@@ -17,6 +15,8 @@ export default function NotificationsScreen() {
   const notifications = useStore((s) => s.notifications);
   const markRead = useStore((s) => s.markNotificationRead);
   const markAllRead = useStore((s) => s.markAllNotificationsRead);
+  const deleteOne = useStore((s) => s.deleteNotification);
+  const clearAll = useStore((s) => s.clearAllNotifications);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = React.useState(false);
@@ -31,19 +31,22 @@ export default function NotificationsScreen() {
     setTimeout(() => setRefreshing(false), 500);
   };
 
-  const renderItem = ({ item, index }: { item: typeof notifications[0]; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(index * 50).duration(400)}>
-      <TouchableOpacity activeOpacity={0.7} onPress={() => handlePress(item.id, item.reportId)}>
-        <LiquidGlassCard
-          style={[
-            styles.notifCard,
-            !item.read && { borderColor: colors.primary, borderWidth: 1.5 },
-          ]}
-        >
-          <View style={styles.notifRow}>
-            <View style={[styles.notifIcon, { backgroundColor: item.read ? colors.bgSecondary : colors.primary + '20' }]}>
-              <Bell size={20} color={item.read ? colors.textTertiary : colors.primary} />
-            </View>
+  const hasUnread = notifications.some((n) => !n.read);
+
+  const renderItem = ({ item }: { item: typeof notifications[0]; index: number }) => (
+    <View>
+      <LiquidGlassCard
+        style={[
+          styles.notifCard,
+          !item.read && { borderColor: colors.primary, borderWidth: 1.5 },
+        ]}
+      >
+        <View style={styles.notifRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => handlePress(item.id, item.reportId)}
+            style={styles.notifTapArea}
+          >
             <View style={styles.notifInfo}>
               <Text style={[styles.notifTitle, { color: colors.text }]} numberOfLines={1}>
                 {item.title}
@@ -55,11 +58,18 @@ export default function NotificationsScreen() {
                 {new Date(item.createdAt).toLocaleString(lang === 'ar' ? 'ar' : 'en')}
               </Text>
             </View>
-            {!item.read && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
-          </View>
-        </LiquidGlassCard>
-      </TouchableOpacity>
-    </Animated.View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => deleteOne(item.id)}
+            style={styles.deleteBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={[styles.deleteX, { color: colors.textTertiary }]}>×</Text>
+          </TouchableOpacity>
+        </View>
+      </LiquidGlassCard>
+    </View>
   );
 
   return (
@@ -67,19 +77,26 @@ export default function NotificationsScreen() {
       <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <View style={styles.header}>
           <Text style={[styles.title, { color: colors.text }]}>{t.notifications}</Text>
-          {notifications.some((n) => !n.read) && (
-            <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
-              <CheckCheck size={18} color={colors.primary} />
-              <Text style={[styles.markAllText, { color: colors.primary }]}>{t.markAllRead}</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.headerActions}>
+            {hasUnread && (
+              <TouchableOpacity onPress={markAllRead} style={styles.actionBtn}>
+                <Text style={[styles.actionText, { color: colors.primary }]}>{t.markAllRead}</Text>
+              </TouchableOpacity>
+            )}
+            {notifications.length > 0 && (
+              <TouchableOpacity onPress={clearAll} style={styles.actionBtn}>
+                <Text style={[styles.actionText, { color: colors.error }]}>
+                  {lang === 'ar' ? 'مسح الكل' : 'Clear all'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {notifications.length === 0 ? (
           <EmptyState
             title={t.noNotifications}
             message={t.noNotificationsMsg}
-            icon={<BellOff size={48} color={colors.textTertiary} />}
           />
         ) : (
           <FlatList
@@ -97,67 +114,25 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
+  container: { flex: 1, paddingHorizontal: 20 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  title: {
-    fontFamily: 'Cairo-Bold',
-    fontSize: 24,
-  },
-  markAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  markAllText: {
-    fontFamily: 'Cairo-Medium',
-    fontSize: 13,
-  },
-  list: {
-    gap: 10,
-  },
-  notifCard: {
-    minHeight: 72,
-  },
-  notifRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  notifIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  notifTitle: {
-    fontFamily: 'Cairo-Bold',
-    fontSize: 14,
-  },
-  notifBody: {
-    fontFamily: 'Cairo-Regular',
-    fontSize: 13,
-  },
-  notifTime: {
-    fontFamily: 'Cairo-Regular',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  unreadDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
+  title: { fontFamily: 'Cairo-Bold', fontSize: 24, lineHeight: 36 },
+  headerActions: { flexDirection: 'row', gap: 16, alignItems: 'center' },
+  actionBtn: { paddingVertical: 4 },
+  actionText: { fontFamily: 'Cairo-Medium', fontSize: 13, lineHeight: 20 },
+  list: { gap: 10 },
+  notifCard: { minHeight: 72 },
+  notifRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  notifTapArea: { flex: 1 },
+  notifInfo: { gap: 2 },
+  notifTitle: { fontFamily: 'Cairo-Bold', fontSize: 14, lineHeight: 22 },
+  notifBody: { fontFamily: 'Cairo-Regular', fontSize: 13, lineHeight: 20 },
+  notifTime: { fontFamily: 'Cairo-Regular', fontSize: 11, lineHeight: 18, marginTop: 2 },
+  deleteBtn: { paddingHorizontal: 8, paddingVertical: 4 },
+  deleteX: { fontFamily: 'Cairo-Bold', fontSize: 24, lineHeight: 28 },
 });
