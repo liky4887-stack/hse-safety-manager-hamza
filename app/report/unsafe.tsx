@@ -3,7 +3,6 @@ import { StyleSheet, View, Text, TextInput, ScrollView, TouchableOpacity, Image,
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInRight, FadeInUp } from 'react-native-reanimated';
-import { AlertTriangle, Camera, Image as ImageIcon, X, CheckCircle, MapPin, ChevronLeft, ChevronRight, FileText, Wrench } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useTheme } from '@/hooks/useTheme';
@@ -43,10 +42,7 @@ export default function UnsafeReportScreen() {
     setLocating(true);
     try {
       const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
-      if (permStatus !== 'granted') {
-        setLocating(false);
-        return;
-      }
+      if (permStatus !== 'granted') { setLocating(false); return; }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const [addr] = await Location.reverseGeocodeAsync({
         latitude: pos.coords.latitude,
@@ -55,23 +51,15 @@ export default function UnsafeReportScreen() {
       const addressStr = addr
         ? `${addr.street || ''} ${addr.city || ''} ${addr.region || ''} ${addr.country || ''}`.trim()
         : `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
-      setLocation({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        address: addressStr,
-      });
-    } catch {
-      // silently fail
-    }
+      setLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, address: addressStr });
+    } catch {}
     setLocating(false);
   };
 
   const takePhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      allowsEditing: true, aspect: [4, 3], quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
   };
@@ -79,9 +67,7 @@ export default function UnsafeReportScreen() {
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      allowsEditing: true, aspect: [4, 3], quality: 0.7,
     });
     if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
   };
@@ -105,19 +91,12 @@ export default function UnsafeReportScreen() {
         category: category ?? undefined,
         description: description.trim(),
         correctiveAction: correctiveAction.trim(),
-        photoUri,
-        department,
-        subcategory,
-        status,
-        priority,
-        location,
+        photoUri, department, subcategory, status, priority, location,
       });
       setSubmitting(false);
       setSubmitted(true);
       setTimeout(() => router.replace('/(tabs)'), 2000);
-    } catch {
-      setSubmitting(false);
-    }
+    } catch { setSubmitting(false); }
   };
 
   if (submitted) {
@@ -125,9 +104,6 @@ export default function UnsafeReportScreen() {
       <GlassBackground>
         <View style={[styles.thankYouContainer, { paddingTop: insets.top }]}>
           <Animated.View entering={FadeInUp.duration(600)} style={styles.thankYouContent}>
-            <View style={[styles.thankYouIcon, { backgroundColor: colors.successLight }]}>
-              <CheckCircle size={64} color={colors.success} strokeWidth={1.5} />
-            </View>
             <Text style={[styles.thankYouTitle, { color: colors.text }]}>{t.thankYou}</Text>
             <Text style={[styles.thankYouMsg, { color: colors.textSecondary }]}>{t.thankYouMsg}</Text>
           </Animated.View>
@@ -135,9 +111,6 @@ export default function UnsafeReportScreen() {
       </GlassBackground>
     );
   }
-
-  const BackIcon = rtl ? ChevronRight : ChevronLeft;
-  const ForwardIcon = rtl ? ChevronLeft : ChevronRight;
 
   return (
     <GlassBackground>
@@ -148,12 +121,12 @@ export default function UnsafeReportScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
-            <TouchableOpacity onPress={() => (step > 1 ? setStep(step - 1) : router.back())} style={styles.backBtn}>
-              <BackIcon size={24} color={colors.primary} />
+            <TouchableOpacity
+              onPress={() => (step > 1 ? setStep(step - 1) : router.back())}
+              style={styles.backBtn}
+            >
+              <Text style={[styles.backArrow, { color: colors.primary }]}>{rtl ? '→' : '←'}</Text>
             </TouchableOpacity>
-            <View style={[styles.headerIcon, { backgroundColor: colors.errorLight }]}>
-              <AlertTriangle size={24} color={colors.error} strokeWidth={1.5} />
-            </View>
             <Text style={[styles.title, { color: colors.text }]}>{t.reportUnsafe}</Text>
           </Animated.View>
 
@@ -174,10 +147,11 @@ export default function UnsafeReportScreen() {
               <Text style={[styles.stepTitle, { color: colors.text }]}>{t.classification}</Text>
               <View style={styles.classOptions}>
                 <TouchableOpacity activeOpacity={0.7} style={{ flex: 1 }} onPress={() => setCategory('condition')}>
-                  <LiquidGlassCard style={[styles.classCard, category === 'condition' && { borderColor: colors.error, borderWidth: 2 }]}>
-                    <View style={[styles.classIcon, { backgroundColor: colors.errorLight }]}>
-                      <AlertTriangle size={28} color={colors.error} />
-                    </View>
+                  <LiquidGlassCard
+                    style={styles.classCard}
+                    selected={category === 'condition'}
+                    selectedColor={colors.error}
+                  >
                     <Text style={[styles.classTitle, { color: colors.text }]}>
                       {lang === 'ar' ? 'حالة غير آمنة' : 'Unsafe Condition'}
                     </Text>
@@ -187,10 +161,11 @@ export default function UnsafeReportScreen() {
                   </LiquidGlassCard>
                 </TouchableOpacity>
                 <TouchableOpacity activeOpacity={0.7} style={{ flex: 1 }} onPress={() => setCategory('act')}>
-                  <LiquidGlassCard style={[styles.classCard, category === 'act' && { borderColor: colors.error, borderWidth: 2 }]}>
-                    <View style={[styles.classIcon, { backgroundColor: colors.warningLight }]}>
-                      <Wrench size={28} color={colors.warning} />
-                    </View>
+                  <LiquidGlassCard
+                    style={styles.classCard}
+                    selected={category === 'act'}
+                    selectedColor={colors.error}
+                  >
                     <Text style={[styles.classTitle, { color: colors.text }]}>
                       {lang === 'ar' ? 'تصرف غير آمن' : 'Unsafe Act'}
                     </Text>
@@ -213,12 +188,10 @@ export default function UnsafeReportScreen() {
                 <LiquidGlassCard style={styles.inputCard}>
                   <TextInput
                     style={[styles.textArea, { color: colors.text }]}
-                    value={description}
-                    onChangeText={setDescription}
+                    value={description} onChangeText={setDescription}
                     placeholder={t.writeNotePlaceholder}
                     placeholderTextColor={colors.textTertiary}
-                    multiline
-                    numberOfLines={4}
+                    multiline numberOfLines={4}
                     textAlignVertical="top"
                   />
                 </LiquidGlassCard>
@@ -230,12 +203,10 @@ export default function UnsafeReportScreen() {
                 <LiquidGlassCard style={styles.inputCard}>
                   <TextInput
                     style={[styles.textArea, { color: colors.text }]}
-                    value={correctiveAction}
-                    onChangeText={setCorrectiveAction}
+                    value={correctiveAction} onChangeText={setCorrectiveAction}
                     placeholder={t.correctiveActionPlaceholder}
                     placeholderTextColor={colors.textTertiary}
-                    multiline
-                    numberOfLines={3}
+                    multiline numberOfLines={3}
                     textAlignVertical="top"
                   />
                 </LiquidGlassCard>
@@ -245,21 +216,22 @@ export default function UnsafeReportScreen() {
                 {photoUri ? (
                   <View style={styles.photoWrap}>
                     <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-                    <TouchableOpacity style={[styles.removePhoto, { backgroundColor: colors.error }]} onPress={() => setPhotoUri(null)}>
-                      <X size={16} color="#FFFFFF" />
+                    <TouchableOpacity
+                      style={[styles.removePhoto, { backgroundColor: colors.error }]}
+                      onPress={() => setPhotoUri(null)}
+                    >
+                      <Text style={styles.removePhotoText}>×</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <View style={styles.photoActions}>
                     <TouchableOpacity onPress={takePhoto} activeOpacity={0.7} style={{ flex: 1 }}>
                       <LiquidGlassCard style={styles.photoOption}>
-                        <Camera size={22} color={colors.primary} />
                         <Text style={[styles.photoOptionText, { color: colors.text }]}>{t.takePhoto}</Text>
                       </LiquidGlassCard>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={pickImage} activeOpacity={0.7} style={{ flex: 1 }}>
                       <LiquidGlassCard style={styles.photoOption}>
-                        <ImageIcon size={22} color={colors.primary} />
                         <Text style={[styles.photoOptionText, { color: colors.text }]}>{t.chooseFromGallery}</Text>
                       </LiquidGlassCard>
                     </TouchableOpacity>
@@ -271,17 +243,15 @@ export default function UnsafeReportScreen() {
                 {location ? (
                   <LiquidGlassCard style={styles.locationCard}>
                     <View style={styles.locationRow}>
-                      <MapPin size={20} color={colors.success} />
                       <Text style={[styles.locationText, { color: colors.text }]} numberOfLines={2}>{location.address}</Text>
                       <TouchableOpacity onPress={() => setLocation(null)}>
-                        <X size={18} color={colors.error} />
+                        <Text style={[styles.removeInline, { color: colors.error }]}>×</Text>
                       </TouchableOpacity>
                     </View>
                   </LiquidGlassCard>
                 ) : (
                   <TouchableOpacity onPress={captureLocation} activeOpacity={0.7}>
                     <LiquidGlassCard style={styles.locationBtn}>
-                      <MapPin size={20} color={colors.primary} />
                       <Text style={[styles.locationBtnText, { color: colors.primary }]}>
                         {locating ? t.capturingLocation : t.gpsLocation}
                       </Text>
@@ -297,21 +267,22 @@ export default function UnsafeReportScreen() {
               <Text style={[styles.stepTitle, { color: colors.text }]}>{t.responsibleDept}</Text>
               <View style={styles.deptGrid}>
                 {DEPARTMENTS.map((dept) => (
-                  <TouchableOpacity
-                    key={dept.id}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      setDepartment(dept.id);
-                      setSubcategory(null);
-                    }}
-                    style={{ flexBasis: '48%', flexGrow: 1 }}
-                  >
-                    <LiquidGlassCard style={[styles.deptCard, department === dept.id && { borderColor: colors.primary, borderWidth: 2 }]}>
-                      <Text style={[styles.deptText, { color: colors.text }]}>
-                        {lang === 'ar' ? dept.nameAr : dept.nameEn}
-                      </Text>
-                    </LiquidGlassCard>
-                  </TouchableOpacity>
+                  <View key={dept.id} style={styles.deptCell}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => { setDepartment(dept.id); setSubcategory(null); }}
+                    >
+                      <LiquidGlassCard
+                        style={styles.deptCard}
+                        selected={department === dept.id}
+                        selectedColor={colors.primary}
+                      >
+                        <Text style={[styles.deptText, { color: colors.text }]}>
+                          {lang === 'ar' ? dept.nameAr : dept.nameEn}
+                        </Text>
+                      </LiquidGlassCard>
+                    </TouchableOpacity>
+                  </View>
                 ))}
               </View>
             </Animated.View>
@@ -322,17 +293,19 @@ export default function UnsafeReportScreen() {
               <Text style={[styles.stepTitle, { color: colors.text }]}>{t.subcategory}</Text>
               <View style={styles.subGrid}>
                 {DEPARTMENTS.find((d) => d.id === department)?.subcategories.map((sub) => (
-                  <TouchableOpacity
-                    key={sub.id}
-                    activeOpacity={0.7}
-                    onPress={() => setSubcategory(sub.id)}
-                  >
-                    <LiquidGlassCard style={[styles.subCard, subcategory === sub.id && { borderColor: colors.primary, borderWidth: 2 }]}>
-                      <Text style={[styles.subText, { color: colors.text }]}>
-                        {lang === 'ar' ? sub.nameAr : sub.nameEn}
-                      </Text>
-                    </LiquidGlassCard>
-                  </TouchableOpacity>
+                  <View key={sub.id} style={styles.subCell}>
+                    <TouchableOpacity activeOpacity={0.7} onPress={() => setSubcategory(sub.id)}>
+                      <LiquidGlassCard
+                        style={styles.subCard}
+                        selected={subcategory === sub.id}
+                        selectedColor={colors.primary}
+                      >
+                        <Text style={[styles.subText, { color: colors.text }]}>
+                          {lang === 'ar' ? sub.nameAr : sub.nameEn}
+                        </Text>
+                      </LiquidGlassCard>
+                    </TouchableOpacity>
+                  </View>
                 ))}
               </View>
             </Animated.View>
@@ -345,8 +318,11 @@ export default function UnsafeReportScreen() {
                 <Text style={[styles.label, { color: colors.textSecondary }]}>{t.status}</Text>
                 <View style={styles.statusRow}>
                   <TouchableOpacity activeOpacity={0.7} style={{ flex: 1 }} onPress={() => setStatus('closed')}>
-                    <LiquidGlassCard style={[styles.statusCard, status === 'closed' && { borderColor: colors.success, borderWidth: 2 }]}>
-                      <CheckCircle size={24} color={colors.success} />
+                    <LiquidGlassCard
+                      style={styles.statusCard}
+                      selected={status === 'closed'}
+                      selectedColor={colors.success}
+                    >
                       <Text style={[styles.statusText, { color: colors.text }]}>{t.closed}</Text>
                       <Text style={[styles.statusDesc, { color: colors.textSecondary }]}>
                         {lang === 'ar' ? 'تم الحل في الموقع' : 'Resolved on site'}
@@ -354,8 +330,11 @@ export default function UnsafeReportScreen() {
                     </LiquidGlassCard>
                   </TouchableOpacity>
                   <TouchableOpacity activeOpacity={0.7} style={{ flex: 1 }} onPress={() => setStatus('open')}>
-                    <LiquidGlassCard style={[styles.statusCard, status === 'open' && { borderColor: colors.error, borderWidth: 2 }]}>
-                      <AlertTriangle size={24} color={colors.error} />
+                    <LiquidGlassCard
+                      style={styles.statusCard}
+                      selected={status === 'open'}
+                      selectedColor={colors.error}
+                    >
                       <Text style={[styles.statusText, { color: colors.text }]}>{t.open}</Text>
                       <Text style={[styles.statusDesc, { color: colors.textSecondary }]}>
                         {lang === 'ar' ? 'يتطلب تدخلاً' : 'Needs intervention'}
@@ -373,17 +352,19 @@ export default function UnsafeReportScreen() {
                     { id: 'high', label: t.priorityHigh, color: colors.warning },
                     { id: 'critical', label: t.priorityCritical, color: colors.error },
                   ] as const).map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      activeOpacity={0.7}
-                      style={{ flex: 1 }}
-                      onPress={() => setPriority(p.id)}
-                    >
-                      <LiquidGlassCard style={[styles.priorityCard, priority === p.id && { borderColor: p.color, borderWidth: 2 }]}>
-                        <View style={[styles.priorityDot, { backgroundColor: p.color }]} />
-                        <Text style={[styles.priorityText, { color: colors.text }]}>{p.label}</Text>
-                      </LiquidGlassCard>
-                    </TouchableOpacity>
+                    <View key={p.id} style={styles.priorityCell}>
+                      <TouchableOpacity activeOpacity={0.7} onPress={() => setPriority(p.id)}>
+                        <LiquidGlassCard
+                          style={styles.priorityCard}
+                          selected={priority === p.id}
+                          selectedColor={p.color}
+                        >
+                          <Text style={[styles.priorityText, { color: colors.text }]} numberOfLines={1}>
+                            {p.label}
+                          </Text>
+                        </LiquidGlassCard>
+                      </TouchableOpacity>
+                    </View>
                   ))}
                 </View>
               </View>
@@ -401,7 +382,7 @@ export default function UnsafeReportScreen() {
                     onPress={() => setStep(step - 1)}
                     variant="ghost"
                     size="md"
-                    fullWidth={false}
+                    fullWidth
                   />
                 </View>
               )}
@@ -412,14 +393,12 @@ export default function UnsafeReportScreen() {
                     onPress={() => canProceed() && setStep(step + 1)}
                     size="md"
                     disabled={!canProceed()}
-                    icon={<ForwardIcon size={20} color="#FFFFFF" />}
                   />
                 ) : (
                   <LiquidGlassButton
                     title={t.submit}
                     onPress={handleSubmit}
                     size="md"
-                    icon={<CheckCircle size={20} color="#FFFFFF" />}
                   />
                 )}
               </View>
@@ -433,52 +412,60 @@ export default function UnsafeReportScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, gap: 16 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
-  backBtn: { position: 'absolute', top: 0, left: 0, zIndex: 10 },
-  headerIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  title: { fontFamily: 'Cairo-Bold', fontSize: 20, flex: 1, textAlign: 'center' },
+  header: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+    marginBottom: 8,
+    position: 'relative',
+  },
+  backBtn: { position: 'absolute', top: 6, start: 0, padding: 6, zIndex: 10 },
+  backArrow: { fontFamily: 'Cairo-Bold', fontSize: 22, lineHeight: 28 },
+  title: { fontFamily: 'Cairo-Bold', fontSize: 20, lineHeight: 30, textAlign: 'center' },
   progressWrap: { gap: 6 },
   progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
   stepText: { fontFamily: 'Cairo-Regular', fontSize: 12, textAlign: 'center' },
-  stepTitle: { fontFamily: 'Cairo-Bold', fontSize: 18, marginBottom: 4 },
+  stepTitle: { fontFamily: 'Cairo-Bold', fontSize: 18, lineHeight: 28, marginBottom: 12, textAlign: 'center' },
   classOptions: { flexDirection: 'row', gap: 12 },
-  classCard: { minHeight: 160, alignItems: 'center', padding: 20 },
-  classIcon: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  classTitle: { fontFamily: 'Cairo-Bold', fontSize: 16, marginBottom: 4 },
-  classDesc: { fontFamily: 'Cairo-Regular', fontSize: 12, textAlign: 'center' },
-  label: { fontFamily: 'Cairo-Medium', fontSize: 14, marginBottom: 8 },
+  classCard: { minHeight: 150, justifyContent: 'center', paddingVertical: 20 },
+  classTitle: { fontFamily: 'Cairo-Bold', fontSize: 16, lineHeight: 26, textAlign: 'center', marginBottom: 4 },
+  classDesc: { fontFamily: 'Cairo-Regular', fontSize: 12, lineHeight: 20, textAlign: 'center' },
+  label: { fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22, marginBottom: 8 },
   inputCard: { minHeight: 80 },
   textArea: { fontFamily: 'Cairo-Regular', fontSize: 16, minHeight: 60, padding: 0 },
   photoWrap: { position: 'relative' },
   photoPreview: { width: '100%', height: 180, borderRadius: 16 },
   removePhoto: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  removePhotoText: { color: '#FFFFFF', fontSize: 20, lineHeight: 22, fontFamily: 'Cairo-Bold' },
+  removeInline: { fontSize: 22, fontFamily: 'Cairo-Bold', lineHeight: 24, paddingHorizontal: 4 },
   photoActions: { flexDirection: 'row', gap: 10 },
-  photoOption: { alignItems: 'center', gap: 8, paddingVertical: 16 },
-  photoOptionText: { fontFamily: 'Cairo-Medium', fontSize: 12, textAlign: 'center' },
+  photoOption: { minHeight: 56, justifyContent: 'center', alignItems: 'center' },
+  photoOptionText: { fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22, textAlign: 'center' },
   locationCard: { minHeight: 48 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  locationText: { flex: 1, fontFamily: 'Cairo-Regular', fontSize: 13 },
-  locationBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
-  locationBtnText: { fontFamily: 'Cairo-Bold', fontSize: 14 },
+  locationText: { flex: 1, fontFamily: 'Cairo-Regular', fontSize: 13, lineHeight: 20 },
+  locationBtn: { minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  locationBtnText: { fontFamily: 'Cairo-Bold', fontSize: 14, lineHeight: 22, textAlign: 'center' },
   deptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  deptCard: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
-  deptText: { fontFamily: 'Cairo-Medium', fontSize: 14, textAlign: 'center' },
+  deptCell: { width: '48%' },
+  deptCard: { minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
+  deptText: { fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22, textAlign: 'center' },
   subGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  subCard: { minHeight: 48, flexBasis: '48%', flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
-  subText: { fontFamily: 'Cairo-Medium', fontSize: 14, textAlign: 'center' },
+  subCell: { width: '48%' },
+  subCard: { minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
+  subText: { fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22, textAlign: 'center' },
   statusRow: { flexDirection: 'row', gap: 12 },
-  statusCard: { alignItems: 'center', gap: 6, paddingVertical: 20 },
-  statusText: { fontFamily: 'Cairo-Bold', fontSize: 16 },
-  statusDesc: { fontFamily: 'Cairo-Regular', fontSize: 11, textAlign: 'center' },
-  priorityRow: { flexDirection: 'row', gap: 8 },
-  priorityCard: { alignItems: 'center', gap: 6, paddingVertical: 14 },
-  priorityDot: { width: 10, height: 10, borderRadius: 5 },
-  priorityText: { fontFamily: 'Cairo-Medium', fontSize: 12, textAlign: 'center' },
+  statusCard: { alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 20 },
+  statusText: { fontFamily: 'Cairo-Bold', fontSize: 16, lineHeight: 26, textAlign: 'center' },
+  statusDesc: { fontFamily: 'Cairo-Regular', fontSize: 11, lineHeight: 18, textAlign: 'center' },
+  priorityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  priorityCell: { width: '23%' },
+  priorityCard: { alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
+  priorityText: { fontFamily: 'Cairo-Medium', fontSize: 11, lineHeight: 18, textAlign: 'center' },
   navButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
   thankYouContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  thankYouContent: { alignItems: 'center', gap: 16 },
-  thankYouIcon: { width: 120, height: 120, borderRadius: 60, alignItems: 'center', justifyContent: 'center' },
-  thankYouTitle: { fontFamily: 'Cairo-Bold', fontSize: 28 },
-  thankYouMsg: { fontFamily: 'Cairo-Regular', fontSize: 16, textAlign: 'center' },
+  thankYouContent: { alignItems: 'center', gap: 16, paddingHorizontal: 24 },
+  thankYouTitle: { fontFamily: 'Cairo-Bold', fontSize: 28, lineHeight: 40, textAlign: 'center' },
+  thankYouMsg: { fontFamily: 'Cairo-Regular', fontSize: 16, lineHeight: 26, textAlign: 'center' },
 });

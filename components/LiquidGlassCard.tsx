@@ -15,6 +15,8 @@ interface LiquidGlassCardProps {
   onPress?: () => void;
   highlight?: boolean;
   shadow?: boolean;
+  selected?: boolean;
+  selectedColor?: string;
 }
 
 export function LiquidGlassCard({
@@ -24,6 +26,8 @@ export function LiquidGlassCard({
   onPress,
   highlight = true,
   shadow = true,
+  selected = false,
+  selectedColor,
 }: LiquidGlassCardProps) {
   const { colors, isDark } = useTheme();
   const pressed = useSharedValue(0);
@@ -45,12 +49,20 @@ export function LiquidGlassCard({
     <Animated.View
       style={[
         styles.wrapper,
-        shadow && { shadowColor: colors.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+        /* shadow removed — Android elevation renders as a rect and breaks rounded look */
         animatedStyle,
         style,
       ]}
     >
-      <View style={[styles.container, { borderColor: colors.glassBorder, borderWidth: 1 }]}>
+      <View
+        style={[
+          styles.container,
+          {
+            borderColor: selected && selectedColor ? selectedColor : colors.glassBorder,
+            borderWidth: selected ? 2 : 1,
+          },
+        ]}
+      >
         {Platform.OS === 'ios' ? (
           <BlurView
             intensity={blurIntensity}
@@ -74,7 +86,6 @@ export function LiquidGlassCard({
           onTouchStart={handlePressIn}
           onTouchEnd={handlePressOut}
           onTouchCancel={handlePressOut}
-          onResponderRelease={() => onPress?.()}
         >
           {children}
         </Animated.View>
@@ -86,6 +97,7 @@ export function LiquidGlassCard({
 const styles = StyleSheet.create({
   wrapper: {
     overflow: 'hidden',
+    borderRadius: radius.lg,
   },
   container: {
     borderRadius: radius.lg,

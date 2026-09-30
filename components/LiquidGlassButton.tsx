@@ -75,16 +75,11 @@ export function LiquidGlassButton({
       style={[
         styles.wrapper,
         fullWidth && { width: '100%' },
-        !disabled && variant !== 'ghost' && {
-          shadowColor: colors.shadow,
-          shadowOffset: { width: 0, height: 3 },
-          shadowOpacity: 0.3,
-          shadowRadius: 8,
-          elevation: 4,
-        },
+        /* shadow removed for flat look */
         animatedStyle,
         style,
       ]}
+      onStartShouldSetResponder={() => !disabled}
       onTouchStart={handlePressIn}
       onTouchEnd={handlePressOut}
       onTouchCancel={handlePressOut}

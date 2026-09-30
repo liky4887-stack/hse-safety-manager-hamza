@@ -1,27 +1,14 @@
 import React from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, Platform, Image } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { ShieldCheck, HardHat, Wrench, Settings, User, ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { useI18n } from '@/hooks/useI18n';
 import { useStore } from '@/store';
 import { GlassBackground } from '@/components/GlassBackground';
-import { LiquidGlassCard } from '@/components/LiquidGlassCard';
 import { LiquidGlassButton } from '@/components/LiquidGlassButton';
-import { ROLES } from '@/config/departments';
-import { DEPARTMENTS } from '@/config/departments';
+import { ROLES, DEPARTMENTS } from '@/config/departments';
 import type { UserRole } from '@/types';
-
-const roleIcons: Record<string, React.ReactNode> = {
-  user: <User size={28} color="#1A7A9C" />,
-  'hard-hat': <HardHat size={28} color="#2D8F6B" />,
-  'shield-check': <ShieldCheck size={28} color="#0A5C7A" />,
-  wrench: <Wrench size={28} color="#E89B2F" />,
-  settings: <Settings size={28} color="#D94848" />,
-};
 
 export default function LoginScreen() {
   const { colors } = useTheme();
@@ -43,76 +30,90 @@ export default function LoginScreen() {
   return (
     <GlassBackground>
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 40 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View entering={FadeInDown.duration(600)} style={styles.logoWrap}>
-          <View style={[styles.logoCircle, { backgroundColor: colors.primary }]}>
-            <ShieldCheck size={48} color={colors.textOnPrimary} strokeWidth={1.5} />
-          </View>
-          <Text style={[styles.companyName, { color: colors.text }]}>{t.company}</Text>
+        <View style={styles.header}>
+          <Text style={[styles.companyName, { color: colors.textSecondary }]}>{t.company}</Text>
           <Text style={[styles.appName, { color: colors.primary }]}>{t.appName}</Text>
-          <Text style={[styles.tagline, { color: colors.textSecondary }]}>{t.splashTagline}</Text>
-        </Animated.View>
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <Text style={[styles.tagline, { color: colors.textTertiary }]}>{t.splashTagline}</Text>
+        </View>
 
-        <Animated.View entering={FadeInDown.delay(200).duration(600)}>
+        <View>
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t.selectRole}</Text>
           <View style={styles.rolesGrid}>
-            {ROLES.map((role) => (
-              <TouchableOpacity
-                key={role.id}
-                onPress={() => setSelectedRole(role.id)}
-                activeOpacity={0.7}
-                style={{ flex: 1 }}
-              >
-                <LiquidGlassCard
+            {ROLES.map((role) => {
+              const isSelected = selectedRole === role.id;
+              return (
+                <TouchableOpacity
+                  key={role.id}
+                  onPress={() => setSelectedRole(role.id)}
+                  activeOpacity={0.8}
                   style={[
                     styles.roleCard,
-                    selectedRole === role.id && { borderColor: colors.primary, borderWidth: 2 },
+                    {
+                      backgroundColor: isSelected ? colors.primary + '14' : colors.surface,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                      borderWidth: isSelected ? 1.5 : 1,
+                    },
                   ]}
                 >
-                  <View style={styles.roleContent}>
-                    {roleIcons[role.icon]}
-                    <Text style={[styles.roleText, { color: colors.text }]}>
-                      {lang === 'ar' ? role.nameAr : role.nameEn}
-                    </Text>
-                  </View>
-                </LiquidGlassCard>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      styles.roleText,
+                      { color: isSelected ? colors.primary : colors.text },
+                    ]}
+                    numberOfLines={2}
+                  >
+                    {lang === 'ar' ? role.nameAr : role.nameEn}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-        </Animated.View>
+        </View>
 
         {selectedRole && (
-          <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <View>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t.department}</Text>
             <View style={styles.deptGrid}>
-              {DEPARTMENTS.map((dept) => (
-                <TouchableOpacity
-                  key={dept.id}
-                  onPress={() => setSelectedDept(dept.id)}
-                  activeOpacity={0.7}
-                >
-                  <LiquidGlassCard
+              {DEPARTMENTS.map((dept) => {
+                const isSelected = selectedDept === dept.id;
+                return (
+                  <TouchableOpacity
+                    key={dept.id}
+                    onPress={() => setSelectedDept(dept.id)}
+                    activeOpacity={0.8}
                     style={[
                       styles.deptChip,
-                      selectedDept === dept.id && { borderColor: colors.primary, borderWidth: 2 },
+                      {
+                        backgroundColor: isSelected ? colors.primary + '14' : colors.surface,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        borderWidth: isSelected ? 1.5 : 1,
+                      },
                     ]}
                   >
-                    <Text style={[styles.deptText, { color: colors.text }]}>
+                    <Text
+                      style={[styles.deptText, { color: isSelected ? colors.primary : colors.text }]}
+                      numberOfLines={1}
+                    >
                       {lang === 'ar' ? dept.nameAr : dept.nameEn}
                     </Text>
-                  </LiquidGlassCard>
-                </TouchableOpacity>
-              ))}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          </Animated.View>
+          </View>
         )}
 
         {selectedRole && selectedDept && (
-          <Animated.View entering={FadeInDown.delay(100).duration(400)}>
+          <View>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>{t.enterName}</Text>
-            <LiquidGlassCard style={styles.inputCard}>
+            <View style={[styles.inputWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <TextInput
                 style={[styles.input, { color: colors.text }]}
                 value={name}
@@ -121,14 +122,14 @@ export default function LoginScreen() {
                 placeholderTextColor={colors.textTertiary}
                 textAlign={rtl ? 'right' : 'left'}
               />
-            </LiquidGlassCard>
-          </Animated.View>
+            </View>
+          </View>
         )}
 
         {name.trim() && selectedRole && selectedDept && (
-          <Animated.View entering={FadeInUp.delay(100).duration(400)} style={styles.buttonWrap}>
+          <View style={styles.buttonWrap}>
             <LiquidGlassButton title={t.enter} onPress={handleLogin} size="lg" />
-          </Animated.View>
+          </View>
         )}
       </ScrollView>
     </GlassBackground>
@@ -136,80 +137,53 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-  gap: 16,
-  },
-  logoWrap: {
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 16,
-  },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
+  scroll: { flexGrow: 1, paddingHorizontal: 22, gap: 22 },
+  header: { alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 12 },
   companyName: {
-    fontFamily: 'Cairo-Bold',
-    fontSize: 16,
+    fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22,
+    textAlign: 'center', letterSpacing: 0.5,
   },
   appName: {
-    fontFamily: 'Cairo-Bold',
-    fontSize: 24,
+    fontFamily: 'Cairo-Bold', fontSize: 26, lineHeight: 38, textAlign: 'center',
   },
+  divider: { width: 44, height: 2, borderRadius: 1, marginVertical: 8, opacity: 0.6 },
   tagline: {
-    fontFamily: 'Cairo-Regular',
-    fontSize: 13,
+    fontFamily: 'Cairo-Regular', fontSize: 13, lineHeight: 20, textAlign: 'center',
   },
   sectionLabel: {
-    fontFamily: 'Cairo-Medium',
-    fontSize: 14,
-    marginBottom: 8,
+    fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22,
+    marginBottom: 10, letterSpacing: 0.3,
   },
-  rolesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
+  rolesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   roleCard: {
-    minHeight: 80,
-  },
-  roleContent: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    minWidth: 96,
+    minHeight: 56,
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
   },
   roleText: {
-    fontFamily: 'Cairo-Medium',
-    fontSize: 13,
-    textAlign: 'center',
+    fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22, textAlign: 'center',
   },
-  deptGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  deptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   deptChip: {
-    minHeight: 44,
+    paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
   },
   deptText: {
-    fontFamily: 'Cairo-Medium',
-    fontSize: 13,
-    textAlign: 'center',
+    fontFamily: 'Cairo-Medium', fontSize: 13, lineHeight: 20, textAlign: 'center',
   },
-  inputCard: {
-    minHeight: 56,
+  inputWrap: {
+    minHeight: 54, borderRadius: 12, borderWidth: 1,
+    paddingHorizontal: 16, justifyContent: 'center',
   },
   input: {
-    fontFamily: 'Cairo-Regular',
-    fontSize: 16,
-    padding: 0,
+    fontFamily: 'Cairo-Regular', fontSize: 16, lineHeight: 24,
+    padding: 0, minHeight: 24,
   },
-  buttonWrap: {
-    marginTop: 8,
-  },
+  buttonWrap: { marginTop: 4 },
 });

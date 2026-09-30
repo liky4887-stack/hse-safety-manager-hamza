@@ -3,7 +3,6 @@ import { StyleSheet, View, Text, TextInput, ScrollView, TouchableOpacity, Image,
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { ShieldCheck, Camera, Image as ImageIcon, X, CheckCircle, MapPin } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '@/hooks/useTheme';
 import { useI18n } from '@/hooks/useI18n';
@@ -15,7 +14,7 @@ import { LoadingState } from '@/components/States';
 
 export default function SafeReportScreen() {
   const { colors } = useTheme();
-  const { t, lang } = useI18n();
+  const { t, lang, rtl } = useI18n();
   const createReport = useStore((s) => s.createReport);
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -28,44 +27,28 @@ export default function SafeReportScreen() {
   const takePhoto = async () => {
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      allowsEditing: true, aspect: [4, 3], quality: 0.7,
     });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-    }
+    if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
   };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
+      allowsEditing: true, aspect: [4, 3], quality: 0.7,
     });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-    }
+    if (!result.canceled && result.assets[0]) setPhotoUri(result.assets[0].uri);
   };
 
   const handleSubmit = async () => {
     if (!description.trim()) return;
     setSubmitting(true);
     try {
-      await createReport({
-        type: 'safe',
-        description: description.trim(),
-        photoUri,
-      });
+      await createReport({ type: 'safe', description: description.trim(), photoUri });
       setSubmitting(false);
       setSubmitted(true);
-      setTimeout(() => {
-        router.replace('/(tabs)');
-      }, 2000);
-    } catch {
-      setSubmitting(false);
-    }
+      setTimeout(() => router.replace('/(tabs)'), 2000);
+    } catch { setSubmitting(false); }
   };
 
   if (submitted) {
@@ -73,9 +56,6 @@ export default function SafeReportScreen() {
       <GlassBackground>
         <View style={[styles.thankYouContainer, { paddingTop: insets.top }]}>
           <Animated.View entering={FadeInUp.duration(600)} style={styles.thankYouContent}>
-            <View style={[styles.thankYouIcon, { backgroundColor: colors.successLight }]}>
-              <CheckCircle size={64} color={colors.success} strokeWidth={1.5} />
-            </View>
             <Text style={[styles.thankYouTitle, { color: colors.text }]}>{t.thankYou}</Text>
             <Text style={[styles.thankYouMsg, { color: colors.textSecondary }]}>{t.thankYouMsg}</Text>
           </Animated.View>
@@ -86,35 +66,29 @@ export default function SafeReportScreen() {
 
   return (
     <GlassBackground>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={{ flex: 1 }}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 100 }]}
           showsVerticalScrollIndicator={false}
         >
           <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <Text style={[styles.backText, { color: colors.primary }]}>{lang === 'ar' ? '← ' + t.back : t.back + ' →'}</Text>
+              <Text style={[styles.backArrow, { color: colors.primary }]}>{rtl ? '→' : '←'}</Text>
             </TouchableOpacity>
-            <View style={[styles.headerIcon, { backgroundColor: colors.successLight }]}>
-              <ShieldCheck size={28} color={colors.success} strokeWidth={1.5} />
-            </View>
             <Text style={[styles.title, { color: colors.text }]}>{t.reportSafe}</Text>
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(100).duration(500)}>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>{t.writeNote} <Text style={{ color: colors.error }}>*</Text></Text>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>
+              {t.writeNote} <Text style={{ color: colors.error }}>*</Text>
+            </Text>
             <LiquidGlassCard style={styles.inputCard}>
               <TextInput
                 style={[styles.textArea, { color: colors.text }]}
-                value={description}
-                onChangeText={setDescription}
+                value={description} onChangeText={setDescription}
                 placeholder={t.writeNotePlaceholder}
                 placeholderTextColor={colors.textTertiary}
-                multiline
-                numberOfLines={5}
+                multiline numberOfLines={5}
                 textAlignVertical="top"
               />
             </LiquidGlassCard>
@@ -129,20 +103,18 @@ export default function SafeReportScreen() {
                   style={[styles.removePhoto, { backgroundColor: colors.error }]}
                   onPress={() => setPhotoUri(null)}
                 >
-                  <X size={16} color="#FFFFFF" />
+                  <Text style={styles.removePhotoText}>×</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.photoActions}>
                 <TouchableOpacity onPress={takePhoto} activeOpacity={0.7} style={{ flex: 1 }}>
                   <LiquidGlassCard style={styles.photoOption}>
-                    <Camera size={24} color={colors.primary} />
                     <Text style={[styles.photoOptionText, { color: colors.text }]}>{t.takePhoto}</Text>
                   </LiquidGlassCard>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={pickImage} activeOpacity={0.7} style={{ flex: 1 }}>
                   <LiquidGlassCard style={styles.photoOption}>
-                    <ImageIcon size={24} color={colors.primary} />
                     <Text style={[styles.photoOptionText, { color: colors.text }]}>{t.chooseFromGallery}</Text>
                   </LiquidGlassCard>
                 </TouchableOpacity>
@@ -159,7 +131,6 @@ export default function SafeReportScreen() {
                 onPress={handleSubmit}
                 size="lg"
                 disabled={!description.trim()}
-                icon={<ShieldCheck size={20} color="#FFFFFF" />}
               />
             )}
           </Animated.View>
@@ -170,109 +141,30 @@ export default function SafeReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    paddingHorizontal: 20,
-    gap: 16,
-  },
+  scroll: { paddingHorizontal: 20, gap: 16 },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  backBtn: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-  },
-  backText: {
-    fontFamily: 'Cairo-Bold',
-    fontSize: 16,
-  },
-  headerIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    },
-  title: {
-    fontFamily: 'Cairo-Bold',
-    fontSize: 22,
-    flex: 1,
-  },
-  label: {
-    fontFamily: 'Cairo-Medium',
-    fontSize: 14,
+    minHeight: 44,
     marginBottom: 8,
-  },
-  inputCard: {
-    minHeight: 120,
-  },
-  textArea: {
-    fontFamily: 'Cairo-Regular',
-    fontSize: 16,
-    minHeight: 100,
-    padding: 0,
-  },
-  photoWrap: {
     position: 'relative',
   },
-  photoPreview: {
-    width: '100%',
-    height: 200,
-    borderRadius: 16,
-    },
-  removePhoto: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  photoOption: {
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 20,
-  },
-  photoOptionText: {
-    fontFamily: 'Cairo-Medium',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  submitWrap: {
-    marginTop: 16,
-  },
-  thankYouContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  thankYouContent: {
-    alignItems: 'center',
-    gap: 16,
-  },
-  thankYouIcon: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  thankYouTitle: {
-    fontFamily: 'Cairo-Bold',
-    fontSize: 28,
-  },
-  thankYouMsg: {
-    fontFamily: 'Cairo-Regular',
-    fontSize: 16,
-    textAlign: 'center',
-  },
+  backBtn: { position: 'absolute', top: 6, start: 0, padding: 6, zIndex: 10 },
+  backArrow: { fontFamily: 'Cairo-Bold', fontSize: 22, lineHeight: 28 },
+  title: { fontFamily: 'Cairo-Bold', fontSize: 22, lineHeight: 32, textAlign: 'center' },
+  label: { fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22, marginBottom: 8 },
+  inputCard: { minHeight: 120 },
+  textArea: { fontFamily: 'Cairo-Regular', fontSize: 16, minHeight: 100, padding: 0 },
+  photoWrap: { position: 'relative' },
+  photoPreview: { width: '100%', height: 200, borderRadius: 16 },
+  removePhoto: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  removePhotoText: { color: '#FFFFFF', fontSize: 20, lineHeight: 22, fontFamily: 'Cairo-Bold' },
+  photoActions: { flexDirection: 'row', gap: 10 },
+  photoOption: { minHeight: 60, alignItems: 'center', justifyContent: 'center', paddingVertical: 18 },
+  photoOptionText: { fontFamily: 'Cairo-Medium', fontSize: 14, lineHeight: 22, textAlign: 'center' },
+  submitWrap: { marginTop: 16 },
+  thankYouContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  thankYouContent: { alignItems: 'center', gap: 16, paddingHorizontal: 24 },
+  thankYouTitle: { fontFamily: 'Cairo-Bold', fontSize: 28, lineHeight: 40, textAlign: 'center' },
+  thankYouMsg: { fontFamily: 'Cairo-Regular', fontSize: 16, lineHeight: 26, textAlign: 'center' },
 });
