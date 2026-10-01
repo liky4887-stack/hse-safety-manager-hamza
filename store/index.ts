@@ -143,10 +143,15 @@ export const useStore = create<AppState>((set, get) => ({
         AsyncStorage.getItem(STORAGE_KEYS.theme),
       ]);
 
-      // Force light theme unless user explicitly picked dark in profile
+      // Default to light theme. Only 'dark' is respected.
       const storedTheme = (themeStr as ThemeMode) || 'light';
-      const resolvedTheme: ThemeMode =
-        storedTheme === 'dark' ? 'dark' : 'light';
+      const resolvedTheme: ThemeMode = storedTheme === 'dark' ? 'dark' : 'light';
+
+      // If the stored value was anything else ('system', undefined, null),
+      // overwrite it with 'light' so the default is sticky.
+      if (storedTheme !== 'dark' && storedTheme !== 'light') {
+        AsyncStorage.setItem(STORAGE_KEYS.theme, 'light').catch(() => {});
+      }
 
       set({
         user: userStr ? JSON.parse(userStr) : null,
