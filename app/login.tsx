@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
@@ -12,7 +12,7 @@ import { ROLES, DEPARTMENTS } from '@/config/departments';
 import type { UserRole } from '@/types';
 
 export default function LoginScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { t, lang, rtl } = useI18n();
   const login = useStore((s) => s.login);
   const saveProfile = useStore((s) => s.saveProfile);

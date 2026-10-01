@@ -24,6 +24,7 @@ const STORAGE_KEYS = {
   language: '@hse_language',
   theme: '@hse_theme',
   lastPickedTheme: '@hse_last_picked_theme',
+  hasSeenSplash: '@hse_has_seen_splash',
 };
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -37,6 +38,7 @@ interface AppState {
   language: Language;
   themeMode: ThemeMode;
   lastPickedTheme: 'light' | 'dark';
+  hasSeenSplash: boolean;
   initialized: boolean;
 
   init: () => Promise<void>;
@@ -72,6 +74,7 @@ interface AppState {
   hydrateFromSupabase: () => Promise<void>;
   saveProfile: (name: string, role: UserRole, department: string) => Promise<void>;
   lookupProfile: (name: string) => Promise<{ role: UserRole; department: string } | null>;
+  markSplashSeen: () => Promise<void>;
 }
 
 
@@ -134,17 +137,19 @@ export const useStore = create<AppState>((set, get) => ({
   language: 'ar',
   themeMode: 'light',
   lastPickedTheme: 'light',
+  hasSeenSplash: false,
   initialized: false,
 
   init: async () => {
     try {
-      const [userStr, reportsStr, notifStr, langStr, themeStr, lastPickedStr] = await Promise.all([
+      const [userStr, reportsStr, notifStr, langStr, themeStr, lastPickedStr, seenSplashStr] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.user),
         AsyncStorage.getItem(STORAGE_KEYS.reports),
         AsyncStorage.getItem(STORAGE_KEYS.notifications),
         AsyncStorage.getItem(STORAGE_KEYS.language),
         AsyncStorage.getItem(STORAGE_KEYS.theme),
         AsyncStorage.getItem(STORAGE_KEYS.lastPickedTheme),
+        AsyncStorage.getItem(STORAGE_KEYS.hasSeenSplash),
       ]);
 
       // Default to light theme. Only 'dark' is respected.
@@ -164,6 +169,7 @@ export const useStore = create<AppState>((set, get) => ({
         language: (langStr as Language) || 'ar',
         themeMode: resolvedTheme,
         lastPickedTheme: (lastPickedStr === 'dark' ? 'dark' : 'light') as 'light' | 'dark',
+        hasSeenSplash: seenSplashStr === 'true',
         initialized: true,
       });
 
@@ -209,18 +215,29 @@ export const useStore = create<AppState>((set, get) => ({
       const { data, error } = await supabase
         .from('hse_reports')
         .select('*')
-        .is('deleted_at', null)
         .order('created_at', { ascending: false })
-        .limit(200);
+        .limit(500);
       if (error) {
         console.warn('[hydrate] failed:', error.message);
         return;
       }
-      const remote = (data ?? []).map(supabaseRowToReport);
+
+      const rows = data ?? [];
+      const liveRows = rows.filter((r: any) => !r.deleted_at);
+      const deletedIds = new Set(
+        rows
+          .filter((r: any) => r.deleted_at && r.client_id)
+          .map((r: any) => r.client_id as string),
+      );
+
+      const remote = liveRows.map(supabaseRowToReport);
       const remoteIds = new Set(remote.map((r) => r.id));
+
       set((state) => {
-        // Keep local-only reports (not yet synced), merge remote in
-        const localOnly = state.reports.filter((r) => !remoteIds.has(r.id));
+        // Remove local copies of reports that were soft-deleted on the server
+        const stillAlive = state.reports.filter((r) => !deletedIds.has(r.id));
+        // Keep local-only reports (created offline, not yet synced)
+        const localOnly = stillAlive.filter((r) => !remoteIds.has(r.id));
         return { reports: [...localOnly, ...remote] };
       });
     } catch (err) {
@@ -240,6 +257,11 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err) {
       console.warn('[deleteReport] remote failed:', err);
     }
+  },
+
+  markSplashSeen: async () => {
+    await AsyncStorage.setItem(STORAGE_KEYS.hasSeenSplash, 'true');
+    set({ hasSeenSplash: true });
   },
 
   saveProfile: async (name, role, department) => {
@@ -285,6 +307,8 @@ export const useStore = create<AppState>((set, get) => ({
     };
     await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
     set({ user });
+    // Pull fresh reports from Supabase (catches anything added while logged out)
+    void get().hydrateFromSupabase();
   },
 
   logout: async () => {

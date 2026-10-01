@@ -17,6 +17,8 @@ export default function RootLayout() {
   const initialized = useStore((s) => s.initialized);
   const user = useStore((s) => s.user);
   const themeMode = useStore((s) => s.themeMode);
+  const hasSeenSplash = useStore((s) => s.hasSeenSplash);
+  const markSplashSeen = useStore((s) => s.markSplashSeen);
   const { rtl } = useI18n();
   const router = useRouter();
   const segments = useSegments();
@@ -46,6 +48,13 @@ export default function RootLayout() {
   useEffect(() => {
     init();
   }, [init]);
+
+  // If user has already seen the splash on a previous launch, skip it
+  useEffect(() => {
+    if (initialized && hasSeenSplash) {
+      setSplashDone(true);
+    }
+  }, [initialized, hasSeenSplash]);
 
   useEffect(() => {
     I18nManager.forceRTL(rtl);
@@ -78,10 +87,13 @@ export default function RootLayout() {
       </Stack>
       <StatusBar style="auto" />
 
-      {!splashDone && (
+      {!splashDone && !hasSeenSplash && (
         <AnimatedSplash
           isDark={themeMode === 'dark'}
-          onFinish={() => setSplashDone(true)}
+          onFinish={() => {
+            setSplashDone(true);
+            void markSplashSeen();
+          }}
         />
       )}
     </>
