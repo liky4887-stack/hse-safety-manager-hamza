@@ -33,69 +33,105 @@ export interface ColorScheme {
   chartColors: string[];
 }
 
-// ── Sky Blue · White · Silver ──────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  Kangaro palette — creamy ivory canvas, crimson ink
+//  Rule: cream/white = 90% of surface. Crimson = only on
+//  interactive + active states. Never as a large background.
+// ═══════════════════════════════════════════════════════════
+
 const light: ColorScheme = {
-  bg: '#F4F7FB',              // near-white
-  bgSecondary: '#E9EEF4',     // soft silver
-  bgTertiary: '#DCE3EB',      // silver
-  surface: '#FFFFFF',
-  glassBg: 'rgba(255, 255, 255, 0.85)',
-  glassBorder: 'rgba(180, 195, 210, 0.55)',
-  glassHighlight: 'rgba(255, 255, 255, 0.95)',
-  text: '#1F2D3D',
-  textSecondary: '#5E6E80',
-  textTertiary: '#93A1B0',
+  // ── Canvas: pure warm cream, no tint ──
+  bg: '#FAF6EE',              // main background — warm ivory
+  bgSecondary: '#F2EBDD',     // slightly deeper cream
+  bgTertiary: '#E8DFCB',      // borders / muted areas
+  surface: '#FFFFFF',         // cards — pure white for contrast
+  glassBg: 'rgba(255, 255, 255, 0.88)',
+  glassBorder: 'rgba(180, 165, 140, 0.28)',
+  glassHighlight: 'rgba(255, 255, 255, 0.98)',
+
+  // ── Text: warm dark, never pure black ──
+  text: '#2A1F22',            // warm near-black
+  textSecondary: '#6B5A5C',
+  textTertiary: '#A08C8E',
   textOnPrimary: '#FFFFFF',
-  primary: '#3B9EDB',         // sky blue
-  primaryLight: '#7CC1E8',
-  primaryDark: '#2878A8',
-  secondary: '#5BA9D6',       // muted sky
-  accent: '#A9C6DE',          // silver-blue
-  success: '#4BA98B',
-  successLight: '#E6F4EF',
-  warning: '#D9A24A',
-  warningLight: '#FBF3E4',
-  error: '#D96A6A',
-  errorLight: '#FBEBEB',
-  danger: '#D96A6A',
-  info: '#3B9EDB',
-  border: 'rgba(60, 100, 140, 0.10)',
-  shadow: 'rgba(40, 80, 120, 0.10)',
-  overlay: 'rgba(20, 40, 60, 0.35)',
-  tabBg: 'rgba(255, 255, 255, 0.92)',
-  chartColors: ['#3B9EDB', '#7CC1E8', '#A9C6DE', '#5E6E80', '#93A1B0', '#4BA98B', '#D9A24A', '#D96A6A'],
+
+  // ── Accent: crimson — used sparingly ──
+  primary: '#E5284B',         // Kangaro crimson
+  primaryLight: '#F26A82',
+  primaryDark: '#B81A3A',
+
+  // ── Secondary: muted warm neutrals (not competing reds) ──
+  secondary: '#7A6B54',       // warm taupe
+  accent: '#C9B99A',          // soft tan
+
+  // ── Status colors — kept muted, not crimson ──
+  success: '#3E7A52',         // forest green
+  successLight: '#E3EFE6',
+  warning: '#C77D2A',         // burnt amber
+  warningLight: '#F7EDD9',
+  error: '#B81A3A',           // deep crimson (distinct from primary)
+  errorLight: '#F7E2E6',
+  danger: '#B81A3A',
+  info: '#6B5A5C',            // neutral warm gray
+
+  // ── Structural ──
+  border: 'rgba(90, 70, 60, 0.10)',
+  shadow: 'rgba(60, 40, 30, 0.08)',
+  overlay: 'rgba(40, 25, 20, 0.40)',
+  tabBg: 'rgba(255, 255, 255, 0.94)',
+
+  // ── Chart: mostly warm neutrals with crimson as first accent ──
+  chartColors: [
+    '#E5284B',   // crimson
+    '#7A6B54',   // taupe
+    '#C77D2A',   // amber
+    '#3E7A52',   // green
+    '#C9B99A',   // tan
+    '#B81A3A',   // deep crimson
+    '#A08C8E',   // mauve gray
+    '#6B5A5C',   // dark taupe
+  ],
 };
 
 const dark: ColorScheme = {
-  bg: '#0F1926',              // deep slate (still cool, not navy-blue AI)
-  bgSecondary: '#16222F',
-  bgTertiary: '#1E2C3B',
-  surface: '#1A2736',
-  glassBg: 'rgba(30, 44, 60, 0.75)',
-  glassBorder: 'rgba(120, 150, 180, 0.20)',
-  glassHighlight: 'rgba(150, 180, 205, 0.15)',
-  text: '#EEF3F8',
-  textSecondary: '#A8B6C4',
-  textTertiary: '#72828F',
+  // ── Canvas: deep warm charcoal, NOT red-tinted ──
+  bg: '#1A1614',              // warm near-black (neutral)
+  bgSecondary: '#231F1C',
+  bgTertiary: '#2E2926',
+  surface: '#282320',         // card surface — warm charcoal
+  glassBg: 'rgba(40, 35, 32, 0.80)',
+  glassBorder: 'rgba(160, 140, 120, 0.18)',
+  glassHighlight: 'rgba(200, 175, 150, 0.12)',
+
+  text: '#F5EFE4',            // warm cream text
+  textSecondary: '#B8A89C',
+  textTertiary: '#7F6F65',
   textOnPrimary: '#FFFFFF',
-  primary: '#5BB4E3',
-  primaryLight: '#8FCBEC',
-  primaryDark: '#3893C4',
-  secondary: '#7CC1E8',
-  accent: '#A9C6DE',
-  success: '#5BB89A',
-  successLight: 'rgba(91, 184, 154, 0.15)',
-  warning: '#E0B060',
-  warningLight: 'rgba(224, 176, 96, 0.15)',
-  error: '#E27C7C',
-  errorLight: 'rgba(226, 124, 124, 0.15)',
-  danger: '#E27C7C',
-  info: '#5BB4E3',
-  border: 'rgba(120, 150, 180, 0.12)',
-  shadow: 'rgba(0, 0, 0, 0.45)',
-  overlay: 'rgba(0, 0, 0, 0.55)',
-  tabBg: 'rgba(22, 34, 47, 0.92)',
-  chartColors: ['#5BB4E3', '#8FCBEC', '#A9C6DE', '#7CC1E8', '#5BB89A', '#E0B060', '#E27C7C', '#72828F'],
+
+  primary: '#F05573',         // brighter crimson for dark mode
+  primaryLight: '#F5899E',
+  primaryDark: '#C9304F',
+  secondary: '#C9B99A',
+  accent: '#8A7A60',
+
+  success: '#6DAE7F',
+  successLight: 'rgba(109, 174, 127, 0.15)',
+  warning: '#E0A45C',
+  warningLight: 'rgba(224, 164, 92, 0.15)',
+  error: '#F05573',
+  errorLight: 'rgba(240, 85, 115, 0.15)',
+  danger: '#F05573',
+  info: '#B8A89C',
+
+  border: 'rgba(180, 160, 140, 0.12)',
+  shadow: 'rgba(0, 0, 0, 0.5)',
+  overlay: 'rgba(0, 0, 0, 0.6)',
+  tabBg: 'rgba(35, 31, 28, 0.94)',
+
+  chartColors: [
+    '#F05573', '#C9B99A', '#E0A45C', '#6DAE7F',
+    '#8A7A60', '#C9304F', '#B8A89C', '#7F6F65',
+  ],
 };
 
 export const themes: Record<'light' | 'dark', ColorScheme> = { light, dark };

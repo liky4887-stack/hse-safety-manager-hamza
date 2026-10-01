@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/hooks/useTheme';
 import { useI18n } from '@/hooks/useI18n';
 import { useStore } from '@/store';
@@ -28,9 +29,17 @@ export default function HomeScreen() {
         contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: 120 }]}
         showsVerticalScrollIndicator={false}
       >
-        <View>
+        <View style={styles.headerWrap}>
           <Text style={[styles.greeting, { color: colors.textSecondary }]}>{t.welcome}</Text>
-          <Text style={[styles.userName, { color: colors.text }]}>{user?.name}</Text>
+          <Text style={[styles.userName, { color: colors.primary }]} numberOfLines={1}>
+            {user?.name}
+          </Text>
+          <LinearGradient
+            colors={[colors.primary, colors.primaryLight, 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.headerAccent}
+          />
         </View>
 
         <View style={styles.cardsCol}>
@@ -40,6 +49,12 @@ export default function HomeScreen() {
             style={styles.cardTouch}
           >
             <LiquidGlassCard style={styles.bigCard}>
+              <LinearGradient
+                colors={[colors.success, colors.success + '00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.cardAccent}
+              />
               <View style={styles.cardCenter}>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>
                   {lang === 'ar' ? t.safeCondition : 'Safe Condition'}
@@ -57,6 +72,12 @@ export default function HomeScreen() {
             style={styles.cardTouch}
           >
             <LiquidGlassCard style={styles.bigCard}>
+              <LinearGradient
+                colors={[colors.primary, colors.primary + '00']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.cardAccent}
+              />
               <View style={styles.cardCenter}>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>
                   {lang === 'ar' ? t.unsafeCondition : 'Unsafe Condition'}
@@ -134,8 +155,23 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, gap: 18 },
+  headerWrap: { gap: 2, position: 'relative' },
   greeting: { fontFamily: 'Cairo-Regular', fontSize: 14, lineHeight: 22 },
-  userName: { fontFamily: 'Cairo-Bold', fontSize: 28, lineHeight: 40 },
+  userName: { fontFamily: 'Cairo-Bold', fontSize: 30, lineHeight: 42 },
+  headerAccent: {
+    height: 3,
+    borderRadius: 2,
+    marginTop: 6,
+    width: '55%',
+    opacity: 0.85,
+  },
+  cardAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: 4,
+  },
   cardsCol: { gap: 12 },
   cardTouch: { width: '100%' },
   bigCard: { minHeight: 96 },

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   User,
+  UserRole,
   Report,
   AppNotification,
   Language,
@@ -65,6 +66,10 @@ interface AppState {
   deleteNotification: (id: string) => Promise<void>;
   clearAllNotifications: () => Promise<void>;
   getUnreadCount: () => number;
+  deleteReport: (id: string) => Promise<void>;
+  hydrateFromSupabase: () => Promise<void>;
+  saveProfile: (name: string, role: UserRole, department: string) => Promise<void>;
+  lookupProfile: (name: string) => Promise<{ role: UserRole; department: string } | null>;
 }
 
 
@@ -91,12 +96,41 @@ async function syncReportToSupabase(report: Report, user: User): Promise<void> {
   } catch (err) { console.error('[sync] unexpected:', err); }
 }
 
+
+function supabaseRowToReport(row: any): Report {
+  return {
+    id: row.client_id || row.id,
+    type: row.type === 'safe' ? 'safe' : 'unsafe',
+    category: row.type === 'unsafe_act' ? 'act' : row.type === 'unsafe_condition' ? 'condition' : null,
+    description: row.note || '',
+    correctiveAction: row.corrective_action ?? null,
+    photoUri: row.image_url ?? null,
+    department: row.department ?? null,
+    subcategory: row.subcategory ?? null,
+    status: (row.status as ReportStatus) || 'open',
+    priority: (row.priority as Priority) ?? null,
+    location: row.location_lat != null && row.location_lng != null
+      ? { latitude: row.location_lat, longitude: row.location_lng, address: row.location_address || '' }
+      : null,
+    createdBy: row.created_by || '',
+    createdByName: row.created_by_name || '',
+    assignedTo: row.assigned_to ?? null,
+    assignedToName: row.assigned_to_name ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at,
+    closedAt: row.closed_at ?? null,
+    timeline: [],
+  };
+}
+
+let realtimeChannel: any = null;
+
 export const useStore = create<AppState>((set, get) => ({
   user: null,
   reports: [],
   notifications: [],
   language: 'ar',
-  themeMode: 'system',
+  themeMode: 'light',
   initialized: false,
 
   init: async () => {
@@ -109,16 +143,123 @@ export const useStore = create<AppState>((set, get) => ({
         AsyncStorage.getItem(STORAGE_KEYS.theme),
       ]);
 
+      // Force light theme unless user explicitly picked dark in profile
+      const storedTheme = (themeStr as ThemeMode) || 'light';
+      const resolvedTheme: ThemeMode =
+        storedTheme === 'dark' ? 'dark' : 'light';
+
       set({
         user: userStr ? JSON.parse(userStr) : null,
         reports: reportsStr ? JSON.parse(reportsStr) : [],
         notifications: notifStr ? JSON.parse(notifStr) : [],
         language: (langStr as Language) || 'ar',
-        themeMode: (themeStr as ThemeMode) || 'system',
+        themeMode: resolvedTheme,
         initialized: true,
       });
+
+      // Pull reports from Supabase (non-blocking, keeps UI responsive)
+      void get().hydrateFromSupabase();
+
+      // One-time realtime subscription — pushes insert/update/delete to every device
+      if (!realtimeChannel) {
+        realtimeChannel = supabase
+          .channel('hse_reports_sync')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'hse_reports' },
+            (payload: any) => {
+              const evt = payload.eventType;
+
+              if (evt === 'INSERT' || evt === 'UPDATE') {
+                const row = payload.new;
+                const local = supabaseRowToReport(row);
+                const isDeleted = row.deleted_at != null;
+                set((state) => {
+                  const withoutThis = state.reports.filter((r) => r.id !== local.id);
+                  return { reports: isDeleted ? withoutThis : [local, ...withoutThis] };
+                });
+              } else if (evt === 'DELETE') {
+                const oldId = payload.old?.client_id || payload.old?.id;
+                if (oldId) {
+                  set((state) => ({ reports: state.reports.filter((r) => r.id !== oldId) }));
+                }
+              }
+            }
+          )
+          .subscribe();
+      }
     } catch {
       set({ initialized: true });
+    }
+  },
+
+
+  hydrateFromSupabase: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hse_reports')
+        .select('*')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) {
+        console.warn('[hydrate] failed:', error.message);
+        return;
+      }
+      const remote = (data ?? []).map(supabaseRowToReport);
+      const remoteIds = new Set(remote.map((r) => r.id));
+      set((state) => {
+        // Keep local-only reports (not yet synced), merge remote in
+        const localOnly = state.reports.filter((r) => !remoteIds.has(r.id));
+        return { reports: [...localOnly, ...remote] };
+      });
+    } catch (err) {
+      console.warn('[hydrate] unexpected:', err);
+    }
+  },
+
+  deleteReport: async (id) => {
+    // 1) Drop locally immediately so the UI responds fast
+    set((state) => ({ reports: state.reports.filter((r) => r.id !== id) }));
+    // 2) Soft-delete in Supabase — realtime broadcasts to all other devices
+    try {
+      await supabase
+        .from('hse_reports')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('client_id', id);
+    } catch (err) {
+      console.warn('[deleteReport] remote failed:', err);
+    }
+  },
+
+  saveProfile: async (name, role, department) => {
+    try {
+      await supabase
+        .from('hse_profiles')
+        .upsert(
+          { name, role, department, updated_at: new Date().toISOString() },
+          { onConflict: 'name' }
+        );
+    } catch (err) {
+      console.warn('[saveProfile] failed:', err);
+    }
+  },
+
+  lookupProfile: async (name) => {
+    try {
+      const { data, error } = await supabase
+        .from('hse_profiles')
+        .select('role, department')
+        .eq('name', name)
+        .maybeSingle();
+      if (error || !data) return null;
+      return {
+        role: data.role as UserRole,
+        department: data.department as string,
+      };
+    } catch (err) {
+      console.warn('[lookupProfile] failed:', err);
+      return null;
     }
   },
 
@@ -238,6 +379,20 @@ export const useStore = create<AppState>((set, get) => ({
         body: `Report ${reportId.slice(0, 8)} has been closed`,
         targetRole: 'hse_officer',
       });
+    }
+
+    // Broadcast status change to all other devices
+    try {
+      await supabase
+        .from('hse_reports')
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+          closed_at: status === 'closed' ? new Date().toISOString() : null,
+        })
+        .eq('client_id', reportId);
+    } catch (err) {
+      console.warn('[updateReportStatus] remote failed:', err);
     }
   },
 
