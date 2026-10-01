@@ -16,12 +16,12 @@ import { LiquidGlassButton } from '@/components/LiquidGlassButton';
 import { DEPARTMENTS, ROLES } from '@/config/departments';
 import type { ThemeMode } from '@/types';
 
-const roleIcons: Record<string, React.ReactNode> = {
-  user: <User size={20} color="#1A7A9C" />,
-  'hard-hat': <HardHat size={20} color="#2D8F6B" />,
-  'shield-check': <ShieldCheck size={20} color="#0A5C7A" />,
-  wrench: <Wrench size={20} color="#E89B2F" />,
-  settings: <SettingsIcon size={20} color="#D94848" />,
+const roleIcons: Record<string, (c: string) => React.ReactNode> = {
+  user: (c) => <User size={20} color={c} />,
+  'hard-hat': (c) => <HardHat size={20} color={c} />,
+  'shield-check': (c) => <ShieldCheck size={20} color={c} />,
+  wrench: (c) => <Wrench size={20} color={c} />,
+  settings: (c) => <SettingsIcon size={20} color={c} />,
 };
 
 export default function ProfileScreen() {
@@ -56,10 +56,10 @@ export default function ProfileScreen() {
     router.replace('/login');
   };
 
-  const themeOptions: { id: ThemeMode; label: string; icon: React.ReactNode }[] = [
-    { id: 'light', label: t.light, icon: <Sun size={18} color={colors.text} /> },
-    { id: 'dark', label: t.dark, icon: <Moon size={18} color={colors.text} /> },
-    { id: 'system', label: t.system, icon: <SettingsIcon size={18} color={colors.text} /> },
+  const themeOptions: { id: ThemeMode; label: string; renderIcon: (c: string) => React.ReactNode }[] = [
+    { id: 'light',  label: t.light,  renderIcon: (c) => <Sun size={18} color={c} /> },
+    { id: 'dark',   label: t.dark,   renderIcon: (c) => <Moon size={18} color={c} /> },
+    { id: 'system', label: t.system, renderIcon: (c) => <SettingsIcon size={18} color={c} /> },
   ];
 
   return (
@@ -70,11 +70,11 @@ export default function ProfileScreen() {
       >
         <Animated.View entering={FadeInDown.duration(500)} style={styles.profileHeader}>
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-            <Text style={styles.avatarText}>{user.name.charAt(0).toUpperCase()}</Text>
+            <Text style={[styles.avatarText, { color: colors.textOnPrimary }]}>{user.name.charAt(0).toUpperCase()}</Text>
           </View>
           <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
           <View style={[styles.roleBadge, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}>
-            {role && roleIcons[role.icon]}
+            {role && roleIcons[role.icon]?.(colors.primary)}
             <Text style={[styles.roleText, { color: colors.primary }]}>
               {lang === 'ar' ? role?.nameAr : role?.nameEn}
             </Text>
@@ -126,15 +126,15 @@ export default function ProfileScreen() {
                 onPress={() => setLang('ar')}
                 style={[styles.langOption, lang === 'ar' && { backgroundColor: colors.primary, borderColor: colors.primary }, { borderColor: colors.border, borderWidth: 1 }]}
               >
-                <Globe size={18} color={lang === 'ar' ? '#FFFFFF' : colors.text} />
-                <Text style={[styles.langText, { color: lang === 'ar' ? '#FFFFFF' : colors.text }]}>{t.arabic}</Text>
+                <Globe size={18} color={lang === 'ar' ? colors.textOnPrimary : colors.text} />
+                <Text style={[styles.langText, { color: lang === 'ar' ? colors.textOnPrimary : colors.text }]}>{t.arabic}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setLang('en')}
                 style={[styles.langOption, lang === 'en' && { backgroundColor: colors.primary, borderColor: colors.primary }, { borderColor: colors.border, borderWidth: 1 }]}
               >
-                <Globe size={18} color={lang === 'en' ? '#FFFFFF' : colors.text} />
-                <Text style={[styles.langText, { color: lang === 'en' ? '#FFFFFF' : colors.text }]}>{t.english}</Text>
+                <Globe size={18} color={lang === 'en' ? colors.textOnPrimary : colors.text} />
+                <Text style={[styles.langText, { color: lang === 'en' ? colors.textOnPrimary : colors.text }]}>{t.english}</Text>
               </TouchableOpacity>
             </View>
           </LiquidGlassCard>
@@ -154,8 +154,8 @@ export default function ProfileScreen() {
                     { borderColor: colors.border, borderWidth: 1 },
                   ]}
                 >
-                  {opt.icon}
-                  <Text style={[styles.themeText, { color: themeMode === opt.id ? '#FFFFFF' : colors.text }]}>
+                  {opt.renderIcon(themeMode === opt.id ? colors.textOnPrimary : colors.text)}
+                  <Text style={[styles.themeText, { color: themeMode === opt.id ? colors.textOnPrimary : colors.text }]}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
@@ -170,7 +170,7 @@ export default function ProfileScreen() {
             onPress={handleLogout}
             variant="danger"
             size="lg"
-            icon={<LogOut size={20} color="#FFFFFF" />}
+            icon={<LogOut size={20} color={colors.textOnPrimary} />}
           />
         </Animated.View>
       </ScrollView>
@@ -198,7 +198,6 @@ const styles = StyleSheet.create({
   avatarText: {
     fontFamily: 'Cairo-Bold',
     fontSize: 36,
-    color: '#FFFFFF',
   },
   userName: {
     fontFamily: 'Cairo-Bold',

@@ -23,6 +23,7 @@ const STORAGE_KEYS = {
   notifications: '@hse_notifications',
   language: '@hse_language',
   theme: '@hse_theme',
+  lastPickedTheme: '@hse_last_picked_theme',
 };
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -35,6 +36,7 @@ interface AppState {
   notifications: AppNotification[];
   language: Language;
   themeMode: ThemeMode;
+  lastPickedTheme: 'light' | 'dark';
   initialized: boolean;
 
   init: () => Promise<void>;
@@ -131,16 +133,18 @@ export const useStore = create<AppState>((set, get) => ({
   notifications: [],
   language: 'ar',
   themeMode: 'light',
+  lastPickedTheme: 'light',
   initialized: false,
 
   init: async () => {
     try {
-      const [userStr, reportsStr, notifStr, langStr, themeStr] = await Promise.all([
+      const [userStr, reportsStr, notifStr, langStr, themeStr, lastPickedStr] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.user),
         AsyncStorage.getItem(STORAGE_KEYS.reports),
         AsyncStorage.getItem(STORAGE_KEYS.notifications),
         AsyncStorage.getItem(STORAGE_KEYS.language),
         AsyncStorage.getItem(STORAGE_KEYS.theme),
+        AsyncStorage.getItem(STORAGE_KEYS.lastPickedTheme),
       ]);
 
       // Default to light theme. Only 'dark' is respected.
@@ -159,6 +163,7 @@ export const useStore = create<AppState>((set, get) => ({
         notifications: notifStr ? JSON.parse(notifStr) : [],
         language: (langStr as Language) || 'ar',
         themeMode: resolvedTheme,
+        lastPickedTheme: (lastPickedStr === 'dark' ? 'dark' : 'light') as 'light' | 'dark',
         initialized: true,
       });
 
@@ -294,7 +299,15 @@ export const useStore = create<AppState>((set, get) => ({
 
   setThemeMode: async (mode) => {
     await AsyncStorage.setItem(STORAGE_KEYS.theme, mode);
-    set({ themeMode: mode });
+
+    // When user picks 'light' or 'dark' explicitly, remember it as their last choice
+    // so that when they later pick 'system', we use their last pick instead of the OS
+    if (mode === 'light' || mode === 'dark') {
+      await AsyncStorage.setItem(STORAGE_KEYS.lastPickedTheme, mode);
+      set({ themeMode: mode, lastPickedTheme: mode });
+    } else {
+      set({ themeMode: mode });
+    }
   },
 
   createReport: async (data) => {

@@ -30,6 +30,7 @@ export interface ColorScheme {
   shadow: string;
   overlay: string;
   tabBg: string;
+  highlight: string;
   chartColors: string[];
 }
 
@@ -79,6 +80,7 @@ const light: ColorScheme = {
   shadow: 'rgba(60, 40, 30, 0.08)',
   overlay: 'rgba(40, 25, 20, 0.40)',
   tabBg: 'rgba(255, 255, 255, 0.94)',
+  highlight: 'rgba(229, 40, 75, 0.14)',
 
   // ── Chart: mostly warm neutrals with crimson as first accent ──
   chartColors: [
@@ -94,43 +96,51 @@ const light: ColorScheme = {
 };
 
 const dark: ColorScheme = {
-  // ── Canvas: deep warm charcoal, NOT red-tinted ──
-  bg: '#1A1614',              // warm near-black (neutral)
-  bgSecondary: '#231F1C',
-  bgTertiary: '#2E2926',
-  surface: '#282320',         // card surface — warm charcoal
-  glassBg: 'rgba(40, 35, 32, 0.80)',
-  glassBorder: 'rgba(160, 140, 120, 0.18)',
-  glassHighlight: 'rgba(200, 175, 150, 0.12)',
+  // ── Deep warm charcoal canvas (neutral, no red tint) ──
+  bg: '#1A1416',              // near-black with warm undertone
+  bgSecondary: '#241B1E',
+  bgTertiary: '#2E2326',
+  surface: '#2A1F22',         // card surface
+  glassBg: 'rgba(42, 31, 34, 0.80)',
+  glassBorder: 'rgba(180, 150, 155, 0.18)',
+  glassHighlight: 'rgba(200, 170, 175, 0.10)',
 
-  text: '#F5EFE4',            // warm cream text
-  textSecondary: '#B8A89C',
-  textTertiary: '#7F6F65',
-  textOnPrimary: '#FFFFFF',
+  // ── Text: warm cream ──
+  text: '#F6EFE2',
+  textSecondary: '#C4B0B3',
+  textTertiary: '#8A7478',
+  textOnPrimary: '#FFFFFF',   // white on red buttons
 
-  primary: '#F05573',         // brighter crimson for dark mode
-  primaryLight: '#F5899E',
-  primaryDark: '#C9304F',
-  secondary: '#C9B99A',
-  accent: '#8A7A60',
+  // ── Primary: SAME Kangaro crimson as light theme ──
+  primary: '#E5284B',
+  primaryLight: '#F05573',
+  primaryDark: '#B81A3A',
 
-  success: '#6DAE7F',
-  successLight: 'rgba(109, 174, 127, 0.15)',
-  warning: '#E0A45C',
-  warningLight: 'rgba(224, 164, 92, 0.15)',
+  // ── Secondary / accent ──
+  secondary: '#C9304F',
+  accent: '#D9C9A8',
+
+  // ── Status (tuned for dark bg) ──
+  success: '#5BB89A',
+  successLight: 'rgba(91, 184, 154, 0.15)',
+  warning: '#E5A052',
+  warningLight: 'rgba(229, 160, 82, 0.15)',
   error: '#F05573',
   errorLight: 'rgba(240, 85, 115, 0.15)',
   danger: '#F05573',
   info: '#B8A89C',
 
-  border: 'rgba(180, 160, 140, 0.12)',
+  // ── Structural ──
+  border: 'rgba(200, 170, 175, 0.12)',
   shadow: 'rgba(0, 0, 0, 0.5)',
   overlay: 'rgba(0, 0, 0, 0.6)',
-  tabBg: 'rgba(35, 31, 28, 0.94)',
+  tabBg: 'rgba(36, 27, 30, 0.94)',
+  highlight: 'rgba(229, 40, 75, 0.28)',
 
+  // ── Charts ──
   chartColors: [
-    '#F05573', '#C9B99A', '#E0A45C', '#6DAE7F',
-    '#8A7A60', '#C9304F', '#B8A89C', '#7F6F65',
+    '#E5284B', '#F05573', '#C9304F', '#D9C9A8',
+    '#5BB89A', '#E5A052', '#B8A89C', '#8A7478',
   ],
 };
 

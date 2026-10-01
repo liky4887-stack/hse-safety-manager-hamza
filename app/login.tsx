@@ -7,6 +7,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useStore } from '@/store';
 import { GlassBackground } from '@/components/GlassBackground';
 import { LiquidGlassButton } from '@/components/LiquidGlassButton';
+import { HighlightedText } from '@/components/HighlightedText';
 import { ROLES, DEPARTMENTS } from '@/config/departments';
 import type { UserRole } from '@/types';
 
@@ -67,7 +68,14 @@ export default function LoginScreen() {
       >
         <View style={styles.header}>
           <Text style={[styles.companyName, { color: colors.textSecondary }]}>{t.company}</Text>
-          <Text style={[styles.appName, { color: colors.primary }]}>{t.appName}</Text>
+          <HighlightedText
+            size={26}
+            lineHeight={40}
+            fontFamily="Thmanyah-Display"
+            style={styles.appName}
+          >
+            {t.appName}
+          </HighlightedText>
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <Text style={[styles.tagline, { color: colors.textTertiary }]}>{t.splashTagline}</Text>
         </View>
