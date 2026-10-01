@@ -76,10 +76,39 @@ export interface AppNotification {
   reportId: string;
   title: string;
   body: string;
-  targetRole: UserRole | 'all';
-  createdAt: string;
+  // Targeted routing
+  recipientRole: UserRole | 'all';
+  recipientDepartment: string;
+  // Who sent it
+  senderName: string;
+  senderRole: UserRole | null;
+  senderDepartment: string | null;
+  // State
   read: boolean;
+  createdAt: string;
+  deletedAt?: string | null;
 }
+
+// Role hierarchy — informational only, used for UI labels.
+// The actual notification routing is department-scoped:
+// everyone in the same department sees every report in that department.
+export const ROLE_UP: Record<UserRole, UserRole | null> = {
+  employee:     'supervisor',
+  technician:   'supervisor',
+  supervisor:   'admin',
+  admin:        'hse_officer',
+  hse_officer:  null,
+};
+
+// Primary target shown to the user ("this is addressed to admins").
+// Not used for filtering — filtering is by department only.
+export const NOTIFY_PRIMARY: Record<UserRole, UserRole | 'all'> = {
+  employee:    'admin',
+  technician:  'admin',
+  supervisor:  'admin',
+  admin:       'all',
+  hse_officer: 'all',
+};
 
 export interface RoleOption {
   id: UserRole;

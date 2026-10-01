@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   User,
   UserRole,
+  ROLE_UP,
+  NOTIFY_PRIMARY,
   Report,
   AppNotification,
   Language,
@@ -72,6 +74,8 @@ interface AppState {
   getUnreadCount: () => number;
   deleteReport: (id: string) => Promise<void>;
   hydrateFromSupabase: () => Promise<void>;
+  hydrateNotifications: () => Promise<void>;
+  retryPendingSync: () => Promise<void>;
   saveProfile: (name: string, role: UserRole, department: string) => Promise<void>;
   lookupProfile: (name: string) => Promise<{ role: UserRole; department: string } | null>;
   markSplashSeen: () => Promise<void>;
@@ -79,6 +83,8 @@ interface AppState {
 
 
 async function syncReportToSupabase(report: Report, user: User): Promise<void> {
+  await markPendingSync(report.id);
+
   try {
     let imageUrl: string | null = null;
     if (report.photoUri) {
@@ -129,6 +135,83 @@ function supabaseRowToReport(row: any): Report {
 }
 
 let realtimeChannel: any = null;
+let notifChannel: any = null;
+
+function supabaseRowToNotification(row: any): AppNotification {
+  return {
+    id: row.id,
+    reportId: row.report_id || '',
+    title: row.title || '',
+    body: row.body || '',
+    recipientRole: (row.recipient_role || 'employee') as UserRole,
+    recipientDepartment: row.recipient_department || '',
+    senderName: row.sender_name || '',
+    senderRole: (row.sender_role || null) as UserRole | null,
+    senderDepartment: row.sender_department || null,
+    read: !!row.read,
+    createdAt: row.created_at,
+    deletedAt: row.deleted_at,
+  };
+}
+
+
+
+const PENDING_SYNC_KEY = '@hse_pending_sync';
+
+async function getPendingSync(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(PENDING_SYNC_KEY);
+    return raw ? JSON.parse(raw) as string[] : [];
+  } catch { return []; }
+}
+
+async function markPendingSync(reportId: string): Promise<void> {
+  const list = await getPendingSync();
+  if (!list.includes(reportId)) {
+    list.push(reportId);
+    await AsyncStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(list));
+  }
+}
+
+async function clearPendingSync(reportId: string): Promise<void> {
+  const list = await getPendingSync();
+  const filtered = list.filter((x) => x !== reportId);
+  await AsyncStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(filtered));
+}
+
+async function pushReportNotification(report: Report, user: User): Promise<void> {
+  const primaryTarget = NOTIFY_PRIMARY[user.role];
+
+  const supabaseType =
+    report.type === 'safe'
+      ? 'safe'
+      : report.category === 'act'
+      ? 'unsafe_act'
+      : 'unsafe_condition';
+
+  const titleAr = report.type === 'safe' ? 'تقرير وضع آمن جديد' : 'تقرير وضع غير آمن جديد';
+  const body = report.description.slice(0, 80) + (report.description.length > 80 ? '…' : '');
+
+  const { error } = await supabase.from('notifications').insert({
+    report_id: report.id,
+    report_type: supabaseType,
+    title: titleAr,
+    body,
+    recipient_role: primaryTarget,
+    recipient_department: user.department,
+    sender_name: user.name,
+    sender_role: user.role,
+    sender_department: user.department,
+  });
+
+  // 23505 = unique violation → already sent, safe to ignore
+  if (error && error.code !== '23505') {
+    console.warn('[pushReportNotification] failed:', error.message);
+    throw error;
+  }
+  console.log('[pushReportNotification] ok for', user.department);
+}
+
 
 export const useStore = create<AppState>((set, get) => ({
   user: null,
@@ -176,6 +259,61 @@ export const useStore = create<AppState>((set, get) => ({
       // Pull reports from Supabase (non-blocking, keeps UI responsive)
       void get().hydrateFromSupabase();
 
+      // Pull notifications for this department
+      void get().hydrateNotifications();
+
+      // Flush any reports queued while offline
+      void get().retryPendingSync();
+
+      // Realtime channel for notifications addressed to this user
+      const currentUser = get().user;
+      if (!notifChannel && currentUser) {
+        notifChannel = supabase
+          .channel('notifications_sync')
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'notifications' },
+            (payload: any) => {
+              const evt = payload.eventType;
+              const row = payload.new || payload.old;
+              if (!row) return;
+
+              // Only keep rows addressed to me
+              const me = get().user;
+              if (!me) return;
+              if (row.recipient_department !== me.department) return;
+
+              if (evt === 'INSERT') {
+                const n = supabaseRowToNotification(row);
+                set((state) => {
+                  if (state.notifications.some((x) => x.id === n.id)) return state;
+                  return { notifications: [n, ...state.notifications] };
+                });
+              } else if (evt === 'UPDATE') {
+                const n = supabaseRowToNotification(row);
+                set((state) => {
+                  if (row.deleted_at) {
+                    return { notifications: state.notifications.filter((x) => x.id !== n.id) };
+                  }
+                  return {
+                    notifications: state.notifications.map((x) =>
+                      x.id === n.id ? n : x
+                    ),
+                  };
+                });
+              } else if (evt === 'DELETE') {
+                const id = payload.old?.id;
+                if (id) {
+                  set((state) => ({
+                    notifications: state.notifications.filter((x) => x.id !== id),
+                  }));
+                }
+              }
+            }
+          )
+          .subscribe();
+      }
+
       // One-time realtime subscription — pushes insert/update/delete to every device
       if (!realtimeChannel) {
         realtimeChannel = supabase
@@ -209,6 +347,53 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+
+
+
+  retryPendingSync: async () => {
+    const pending = await getPendingSync();
+    if (pending.length === 0) return;
+    const user = get().user;
+    if (!user) return;
+    console.log('[retryPendingSync] flushing', pending.length, 'pending reports');
+    for (const id of pending) {
+      const report = get().reports.find((r) => r.id === id);
+      if (!report) { await clearPendingSync(id); continue; }
+      try {
+        await syncReportToSupabase(report, user);
+        await pushReportNotification(report, user);
+      } catch (err) {
+        console.warn('[retryPendingSync] still failing for', id, err);
+      }
+    }
+    void get().hydrateFromSupabase();
+    void get().hydrateNotifications();
+    void get().retryPendingSync();
+  },
+
+  hydrateNotifications: async () => {
+    try {
+      const me = get().user;
+      if (!me) return;
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('recipient_department', me.department)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error) {
+        console.warn('[hydrateNotifications] failed:', error.message);
+        return;
+      }
+      const remote = (data ?? []).map(supabaseRowToNotification);
+      set({ notifications: remote });
+    } catch (err) {
+      console.warn('[hydrateNotifications] unexpected:', err);
+    }
+  },
 
   hydrateFromSupabase: async () => {
     try {
@@ -307,8 +492,10 @@ export const useStore = create<AppState>((set, get) => ({
     };
     await AsyncStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
     set({ user });
-    // Pull fresh reports from Supabase (catches anything added while logged out)
+    // Pull fresh reports + notifications from Supabase for this user
     void get().hydrateFromSupabase();
+    void get().hydrateNotifications();
+    void get().retryPendingSync();
   },
 
   logout: async () => {
@@ -391,6 +578,7 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     void syncReportToSupabase(report, user);
+    void pushReportNotification(report, user);
 
     return report;
   },
@@ -469,12 +657,19 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   addNotification: async (notif) => {
+    // Legacy local-only path (kept for backward compat) — normally the app
+    // relies on pushReportNotification which writes to Supabase + realtime.
+    const me = get().user;
     const notification: AppNotification = {
       id: generateId(),
       reportId: notif.reportId,
       title: notif.title,
       body: notif.body,
-      targetRole: notif.targetRole,
+      recipientRole: (me?.role ?? 'employee') as UserRole,
+      recipientDepartment: me?.department ?? '',
+      senderName: me?.name ?? '',
+      senderRole: me?.role ?? null,
+      senderDepartment: me?.department ?? null,
       createdAt: getTimestamp(),
       read: false,
     };
@@ -489,23 +684,42 @@ export const useStore = create<AppState>((set, get) => ({
     );
     await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
     set({ notifications });
+    void supabase.from('notifications').update({ read: true }).eq('id', id);
   },
 
   markAllNotificationsRead: async () => {
     const notifications = get().notifications.map((n) => ({ ...n, read: true }));
     await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
     set({ notifications });
+    const me = get().user;
+    if (me) {
+      void supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('recipient_department', me.department);
+    }
   },
 
   deleteNotification: async (id) => {
     const notifications = get().notifications.filter((n) => n.id !== id);
     await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
     set({ notifications });
+    void supabase
+      .from('notifications')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
   },
 
   clearAllNotifications: async () => {
     await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify([]));
     set({ notifications: [] });
+    const me = get().user;
+    if (me) {
+      void supabase
+        .from('notifications')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('recipient_department', me.department);
+    }
   },
 
   getUnreadCount: () => get().notifications.filter((n) => !n.read).length,
