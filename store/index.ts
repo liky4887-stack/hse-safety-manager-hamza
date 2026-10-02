@@ -3,8 +3,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   User,
   UserRole,
-  ROLE_UP,
-  NOTIFY_PRIMARY,
   DashboardUser,
   DashboardSession,
   Report,
@@ -17,6 +15,7 @@ import type {
   ReportStatus,
   ReportLocation,
 } from '@/types';
+import { ROLE_UP, NOTIFY_PRIMARY } from '@/types';
 import { DEPARTMENTS } from '@/config/departments';
 import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/uploadImage';
@@ -78,7 +77,7 @@ interface AppState {
   getReportById: (id: string) => Report | undefined;
   getUserReports: () => Report[];
 
-  addNotification: (notif: Omit<AppNotification, 'id' | 'createdAt' | 'read'>) => Promise<void>;
+  addNotification: (notif: Pick<AppNotification, 'reportId' | 'title' | 'body'>) => Promise<void>;
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
@@ -110,25 +109,42 @@ async function syncReportToSupabase(report: Report, user: User): Promise<void> {
     let imageUrl: string | null = null;
     if (report.photoUri) {
       imageUrl = await uploadImage(report.photoUri, 'reports');
+
+      // If the image upload failed, abort this sync — leave the report
+      // in the pending queue so the whole thing retries with the image next time.
+      if (!imageUrl) {
+        console.warn('[sync] image upload failed — retrying later:', report.id);
+        return;
+      }
     }
     const supabaseType = report.type === 'safe' ? 'safe' : report.category === 'act' ? 'unsafe_act' : 'unsafe_condition';
-    const { error } = await supabase.from('hse_reports').insert({
-      client_id: report.id, type: supabaseType, note: report.description,
-      corrective_action: report.correctiveAction ?? null, image_url: imageUrl,
-      department: report.department ?? null, subcategory: report.subcategory ?? null,
-      status: report.status, priority: report.priority ?? null,
-      created_by: user.id, created_by_name: user.name,
-      location_lat: report.location?.latitude ?? null,
-      location_lng: report.location?.longitude ?? null,
-      location_address: report.location?.address ?? null,
-      approved: true,
-      approved_at: report.createdAt,
-      approved_by: user.name,
-      created_at: report.createdAt,
+    const { error } = await supabase.rpc('create_hse_report', {
+      p_client_id: report.id,
+      p_type: supabaseType,
+      p_note: report.description,
+      p_corrective_action: report.correctiveAction ?? null,
+      p_image_url: imageUrl,
+      p_department: report.department ?? null,
+      p_subcategory: report.subcategory ?? null,
+      p_status: report.status,
+      p_priority: report.priority ?? null,
+      p_created_by: user.id,
+      p_created_by_name: user.name,
+      p_location_lat: report.location?.latitude ?? null,
+      p_location_lng: report.location?.longitude ?? null,
+      p_location_address: report.location?.address ?? null,
+      p_created_at: report.createdAt,
     });
-    if (error) console.error('[sync] insert failed:', error);
-    else console.log('[sync] pushed to Supabase:', report.id);
-  } catch (err) { console.error('[sync] unexpected:', err); }
+    if (error) {
+      console.error('[sync] rpc failed:', error);
+      return;  // leave in pending queue for retry
+    }
+    console.log('[sync] pushed via RPC:', report.id);
+    await clearPendingSync(report.id);   // ← success: remove from queue
+  } catch (err) {
+    console.error('[sync] unexpected:', err);
+    // leave in pending queue for retry
+  }
 }
 
 
@@ -221,20 +237,20 @@ async function pushReportNotification(report: Report, user: User): Promise<void>
   const titleAr = report.type === 'safe' ? 'تقرير وضع آمن جديد' : 'تقرير وضع غير آمن جديد';
   const body = report.description.slice(0, 80) + (report.description.length > 80 ? '…' : '');
 
-  const { error } = await supabase.from('notifications').insert({
-    report_id: report.id,
-    report_type: supabaseType,
-    title: titleAr,
-    body,
-    recipient_role: primaryTarget,
-    recipient_department: user.department,
-    sender_name: user.name,
-    sender_role: user.role,
-    sender_department: user.department,
+  const { error } = await supabase.rpc('insert_notification', {
+    p_report_id: report.id,
+    p_report_type: supabaseType,
+    p_title: titleAr,
+    p_body: body,
+    p_recipient_role: primaryTarget,
+    p_recipient_department: user.department,
+    p_sender_name: user.name,
+    p_sender_role: user.role,
+    p_sender_department: user.department,
+    p_for_dashboard: false,
   });
 
-  // 23505 = unique violation → already sent, safe to ignore
-  if (error && error.code !== '23505') {
+  if (error) {
     console.warn('[pushReportNotification] failed:', error.message);
     throw error;
   }
@@ -388,18 +404,16 @@ export const useStore = create<AppState>((set, get) => ({
 
 
   softDeleteReport: async (clientId) => {
-    // Optimistic local removal
+    // Optimistic local removal + persist to AsyncStorage so it survives app restart
     set((state) => ({ reports: state.reports.filter((r) => r.id !== clientId) }));
-    // Server-side soft delete (dept scope) — hides from app + dept dashboard,
-    // still visible in main dashboard
-    const nowIso = new Date().toISOString();
-    const { error } = await supabase
-      .from('hse_reports')
-      .update({ deleted_at_dept: nowIso, updated_at: nowIso })
-      .eq('client_id', clientId);
+    await AsyncStorage.setItem(STORAGE_KEYS.reports, JSON.stringify(get().reports));
+
+    // Server-side soft delete (dept scope) via RPC
+    const { error } = await supabase.rpc('soft_delete_hse_report_dept', {
+      p_client_id: clientId,
+    });
     if (error) {
       console.warn('[softDeleteReport] failed:', error.message);
-      // Reload to resync on failure
       void get().hydrateFromSupabase();
     } else {
       console.log('[softDeleteReport] hidden', clientId);
@@ -424,7 +438,6 @@ export const useStore = create<AppState>((set, get) => ({
     }
     void get().hydrateFromSupabase();
     void get().hydrateNotifications();
-    void get().retryPendingSync();
   },
 
   hydrateNotifications: async () => {
@@ -446,6 +459,7 @@ export const useStore = create<AppState>((set, get) => ({
       }
       const remote = (data ?? []).map(supabaseRowToNotification);
       set({ notifications: remote });
+      await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(remote));
     } catch (err) {
       console.warn('[hydrateNotifications] unexpected:', err);
     }
@@ -480,26 +494,23 @@ export const useStore = create<AppState>((set, get) => ({
       const remoteIds = new Set(remote.map((r) => r.id));
 
       set((state) => {
-        // Remove local copies of reports that were soft-deleted on the server
         const stillAlive = state.reports.filter((r) => !deletedIds.has(r.id));
-        // Keep local-only reports (created offline, not yet synced)
         const localOnly = stillAlive.filter((r) => !remoteIds.has(r.id));
         return { reports: [...localOnly, ...remote] };
       });
+      await AsyncStorage.setItem(STORAGE_KEYS.reports, JSON.stringify(get().reports));
     } catch (err) {
       console.warn('[hydrate] unexpected:', err);
     }
   },
 
   deleteReport: async (id) => {
-    // 1) Drop locally immediately so the UI responds fast
+    // 1) Drop locally immediately + persist so restart keeps it deleted
     set((state) => ({ reports: state.reports.filter((r) => r.id !== id) }));
+    await AsyncStorage.setItem(STORAGE_KEYS.reports, JSON.stringify(get().reports));
     // 2) Soft-delete in Supabase — realtime broadcasts to all other devices
     try {
-      await supabase
-        .from('hse_reports')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('client_id', id);
+      await supabase.rpc('soft_delete_hse_report_global', { p_client_id: id });
     } catch (err) {
       console.warn('[deleteReport] remote failed:', err);
     }
@@ -512,12 +523,11 @@ export const useStore = create<AppState>((set, get) => ({
 
   saveProfile: async (name, role, department) => {
     try {
-      await supabase
-        .from('hse_profiles')
-        .upsert(
-          { name, role, department, updated_at: new Date().toISOString() },
-          { onConflict: 'name' }
-        );
+      await supabase.rpc('upsert_hse_profile', {
+        p_name: name,
+        p_role: role,
+        p_department: department,
+      });
     } catch (err) {
       console.warn('[saveProfile] failed:', err);
     }
@@ -658,15 +668,10 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     }));
 
-    const { error } = await supabase
-      .from('hse_reports')
-      .update({
-        approved: true,
-        approved_at: nowIso,
-        approved_by: dUser.username,
-        updated_at: nowIso,
-      })
-      .eq('client_id', clientId);
+    const { error } = await supabase.rpc('set_hse_report_approved', {
+      p_client_id: clientId,
+      p_approved: true,
+    });
 
     if (error) console.warn('[approveReport] failed:', error.message);
     else console.log('[approveReport] approved', clientId);
@@ -676,12 +681,9 @@ export const useStore = create<AppState>((set, get) => ({
     const dUser = get().dashboardUser;
     if (!dUser || dUser.isSuper) { console.warn('[deleteReportFromDept] not allowed'); return; }
 
-    const nowIso = new Date().toISOString();
-
-    const { error } = await supabase
-      .from('hse_reports')
-      .update({ deleted_at_dept: nowIso, updated_at: nowIso })
-      .eq('client_id', clientId);
+    const { error } = await supabase.rpc('soft_delete_hse_report_dept', {
+      p_client_id: clientId,
+    });
 
     if (error) console.warn('[deleteReportFromDept] failed:', error.message);
     else console.log('[deleteReportFromDept] hidden from', dUser.department, '·', clientId);
@@ -691,12 +693,9 @@ export const useStore = create<AppState>((set, get) => ({
     const dUser = get().dashboardUser;
     if (!dUser || !dUser.isSuper) { console.warn('[deleteReportFromMain] not allowed'); return; }
 
-    const nowIso = new Date().toISOString();
-
-    const { error } = await supabase
-      .from('hse_reports')
-      .update({ deleted_at_main: nowIso, updated_at: nowIso })
-      .eq('client_id', clientId);
+    const { error } = await supabase.rpc('soft_delete_hse_report_main', {
+      p_client_id: clientId,
+    });
 
     if (error) console.warn('[deleteReportFromMain] failed:', error.message);
     else console.log('[deleteReportFromMain] hidden from main ·', clientId);
@@ -706,10 +705,10 @@ export const useStore = create<AppState>((set, get) => ({
     const dUser = get().dashboardUser;
     if (!dUser || dUser.isSuper) return;
 
-    const { error } = await supabase
-      .from('hse_reports')
-      .update({ deleted_at_dept: null, updated_at: new Date().toISOString() })
-      .eq('client_id', clientId);
+    const { error } = await supabase.rpc('restore_hse_report', {
+      p_client_id: clientId,
+      p_target: 'dept',
+    });
 
     if (error) console.warn('[restoreReportFromDept] failed:', error.message);
   },
@@ -718,10 +717,10 @@ export const useStore = create<AppState>((set, get) => ({
     const dUser = get().dashboardUser;
     if (!dUser || !dUser.isSuper) return;
 
-    const { error } = await supabase
-      .from('hse_reports')
-      .update({ deleted_at_main: null, updated_at: new Date().toISOString() })
-      .eq('client_id', clientId);
+    const { error } = await supabase.rpc('restore_hse_report', {
+      p_client_id: clientId,
+      p_target: 'main',
+    });
 
     if (error) console.warn('[restoreReportFromMain] failed:', error.message);
   },
@@ -738,20 +737,20 @@ export const useStore = create<AppState>((set, get) => ({
     const titleAr = 'تقرير جديد';
     const body = `${user.name}: ${report.description.slice(0, 60)}${report.description.length > 60 ? '…' : ''}`;
 
-    const { error } = await supabase.from('notifications').insert({
-      report_id: report.id,
-      report_type: supabaseType,
-      title: titleAr,
-      body,
-      recipient_role: 'admin',
-      recipient_department: user.department,
-      sender_name: user.name,
-      sender_role: user.role,
-      sender_department: user.department,
-      for_dashboard: true,
+    const { error } = await supabase.rpc('insert_notification', {
+      p_report_id: report.id,
+      p_report_type: supabaseType,
+      p_title: titleAr,
+      p_body: body,
+      p_recipient_role: 'admin',
+      p_recipient_department: user.department,
+      p_sender_name: user.name,
+      p_sender_role: user.role,
+      p_sender_department: user.department,
+      p_for_dashboard: true,
     });
 
-    if (error && error.code !== '23505') {
+    if (error) {
       console.warn('[pushDashboardNotification] failed:', error.message);
     } else {
       console.log('[pushDashboardNotification] dashboard notified for', user.department);
@@ -849,14 +848,12 @@ export const useStore = create<AppState>((set, get) => ({
         reportId: report.id,
         title: 'New Unsafe Report',
         body: `${data.priority ?? 'medium'} priority — ${dept?.nameEn ?? 'Unknown'} department`,
-        targetRole: 'technician',
       });
     } else if (data.type === 'safe') {
       await get().addNotification({
         reportId: report.id,
         title: 'New Safe Report',
         body: 'Safe condition documented for review',
-        targetRole: 'hse_officer',
       });
     }
 
@@ -891,20 +888,15 @@ export const useStore = create<AppState>((set, get) => ({
         reportId,
         title: 'Report Closed',
         body: `Report ${reportId.slice(0, 8)} has been closed`,
-        targetRole: 'hse_officer',
       });
     }
 
     // Broadcast status change to all other devices
     try {
-      await supabase
-        .from('hse_reports')
-        .update({
-          status,
-          updated_at: new Date().toISOString(),
-          closed_at: status === 'closed' ? new Date().toISOString() : null,
-        })
-        .eq('client_id', reportId);
+      await supabase.rpc('set_hse_report_status', {
+        p_client_id: reportId,
+        p_status: status,
+      });
     } catch (err) {
       console.warn('[updateReportStatus] remote failed:', err);
     }
@@ -988,10 +980,12 @@ export const useStore = create<AppState>((set, get) => ({
     const notifications = get().notifications.filter((n) => n.id !== id);
     await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
     set({ notifications });
-    void supabase
-      .from('notifications')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+    // Await the remote update — prevents notification from reappearing on restart
+    try {
+      await supabase.rpc('delete_hse_notification', { p_id: id });
+    } catch (err) {
+      console.warn('[deleteNotification] remote failed:', err);
+    }
   },
 
   clearAllNotifications: async () => {
@@ -999,10 +993,13 @@ export const useStore = create<AppState>((set, get) => ({
     set({ notifications: [] });
     const me = get().user;
     if (me) {
-      void supabase
-        .from('notifications')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('recipient_department', me.department);
+      try {
+        await supabase.rpc('clear_hse_notifications', {
+          p_department: me.department,
+        });
+      } catch (err) {
+        console.warn('[clearAllNotifications] remote failed:', err);
+      }
     }
   },
 

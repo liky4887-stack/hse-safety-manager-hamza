@@ -32,13 +32,14 @@ export async function saveToPhone(
         mimeType,
       );
 
-      // Detect binary vs text: PDF and images are binary, must use Base64
-      const isBinary =
-        mimeType === 'application/pdf' ||
-        mimeType.startsWith('image/');
-      const encoding = isBinary
-        ? FileSystem.EncodingType.Base64
-        : FileSystem.EncodingType.UTF8;
+      // Text-only MIME types use UTF-8; everything else is binary (PDF, xlsx, docx, images)
+      const isText =
+        mimeType.startsWith('text/') ||
+        mimeType === 'application/json' ||
+        mimeType === 'application/xml';
+      const encoding = isText
+        ? FileSystem.EncodingType.UTF8
+        : FileSystem.EncodingType.Base64;
 
       const content = await FileSystem.readAsStringAsync(sourceUri, {
         encoding,

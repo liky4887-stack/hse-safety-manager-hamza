@@ -16,6 +16,8 @@ import { generateDashboardPdf } from '@/lib/dashboardPdf';
 import { saveToPhone } from '@/lib/saveToPhone';
 import { generateDashboardExcel } from '@/lib/dashboardExcel';
 import { generateDashboardWord } from '@/lib/dashboardWord';
+import { BarChartCapture, PieChartCapture } from '@/components/ChartCapture';
+import type { ChartHandle } from '@/components/ChartCapture';
 
 type Mode = 'main' | 'dept';
 type Tab = 'all' | 'open' | 'closed' | 'analytics';
@@ -176,16 +178,29 @@ export function DashboardView({ mode, department }: Props) {
     load();
   };
 
+  const captureCharts = async () => {
+    await new Promise((r) => setTimeout(r, 400));
+    const bar = (await barChartRef.current?.capture()) ?? null;
+    const pie = (await pieChartRef.current?.capture()) ?? null;
+    console.log('[captureCharts] bar:', bar?.length, 'pie:', pie?.length);
+    return { bar, pie };
+  };
+
   const [exporting, setExporting] = React.useState(false);
+  const barChartRef = React.useRef<ChartHandle>(null);
+  const pieChartRef = React.useRef<ChartHandle>(null);
 
   const handleExportExcel = async () => {
     if (exporting) return;
     setExporting(true);
     try {
+      const { bar, pie } = await captureCharts();
       const path = await generateDashboardExcel({
         title: lang === 'ar' ? 'لوحة التحكم' : 'Dashboard',
         subtitle: deptLabel,
         generatedBy: dashboardUser?.displayName ?? '—',
+        barChartBase64: bar,
+        pieChartBase64: pie,
         rows: allRows.map((r) => ({
           client_id: r.client_id, note: r.note,
           department: r.department, subcategory: r.subcategory,
@@ -202,8 +217,8 @@ export function DashboardView({ mode, department }: Props) {
         },
         isArabic: lang === 'ar',
       });
-      const filename = `dashboard-${Date.now()}.xls`;
-      const saved = await saveToPhone(path, filename, 'application/vnd.ms-excel', 'حفظ Excel');
+      const filename = `dashboard-${Date.now()}.xlsx`;
+      const saved = await saveToPhone(path, filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'حفظ Excel');
       if (saved) Alert.alert('✓ تم الحفظ', 'Excel');
     } catch (err) {
       console.error('[handleExportExcel] failed:', err);
@@ -215,10 +230,13 @@ export function DashboardView({ mode, department }: Props) {
     if (exporting) return;
     setExporting(true);
     try {
+      const { bar, pie } = await captureCharts();
       const path = await generateDashboardWord({
         title: lang === 'ar' ? 'لوحة التحكم' : 'Dashboard',
         subtitle: deptLabel,
         generatedBy: dashboardUser?.displayName ?? '—',
+        barChartBase64: bar,
+        pieChartBase64: pie,
         rows: allRows.map((r) => ({
           client_id: r.client_id, note: r.note,
           department: r.department, subcategory: r.subcategory,
@@ -235,8 +253,8 @@ export function DashboardView({ mode, department }: Props) {
         },
         isArabic: lang === 'ar',
       });
-      const filename = `dashboard-${Date.now()}.doc`;
-      const saved = await saveToPhone(path, filename, 'application/msword', 'حفظ Word');
+      const filename = `dashboard-${Date.now()}.docx`;
+      const saved = await saveToPhone(path, filename, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'حفظ Word');
       if (saved) Alert.alert('✓ تم الحفظ', 'Word');
     } catch (err) {
       console.error('[handleExportWord] failed:', err);
@@ -637,6 +655,55 @@ export function DashboardView({ mode, department }: Props) {
             </View>
           )}
         </ScrollView>
+
+        {/* Bar chart capture target — SVG only, captured via toDataURL */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            opacity: 0.01,
+            zIndex: -10,
+          }}
+          pointerEvents="none"
+        >
+          <BarChartCapture
+            ref={barChartRef}
+            data={(['critical', 'high', 'medium', 'low'] as const).map((k) => ({
+              key: k,
+              label:
+                k === 'critical' ? (lang === 'ar' ? 'حرجة' : 'Critical')
+                : k === 'high' ? (lang === 'ar' ? 'عالية' : 'High')
+                : k === 'medium' ? (lang === 'ar' ? 'متوسطة' : 'Medium')
+                : (lang === 'ar' ? 'منخفضة' : 'Low'),
+              value: analytics.byPriority[k] || 0,
+            }))}
+            width={700}
+            height={400}
+          />
+        </View>
+
+        {/* Pie chart capture target — SVG only, captured via toDataURL */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 500,
+            left: 0,
+            opacity: 0.01,
+            zIndex: -10,
+          }}
+          pointerEvents="none"
+        >
+          <PieChartCapture
+            ref={pieChartRef}
+            data={analytics.topSubs.slice(0, 5).map(([k, v]) => ({
+              label: k,
+              value: v,
+            }))}
+            width={700}
+            height={500}
+          />
+        </View>
       </View>
     </GlassBackground>
   );
