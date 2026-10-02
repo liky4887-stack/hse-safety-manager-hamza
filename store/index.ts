@@ -960,7 +960,11 @@ export const useStore = create<AppState>((set, get) => ({
     );
     await AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications));
     set({ notifications });
-    void supabase.from('notifications').update({ read: true }).eq('id', id);
+    try {
+      await supabase.rpc('mark_hse_notification_read', { p_id: id });
+    } catch (err) {
+      console.warn('[markNotificationRead] remote failed:', err);
+    }
   },
 
   markAllNotificationsRead: async () => {
@@ -969,10 +973,13 @@ export const useStore = create<AppState>((set, get) => ({
     set({ notifications });
     const me = get().user;
     if (me) {
-      void supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('recipient_department', me.department);
+      try {
+        await supabase.rpc('mark_all_hse_notifications_read', {
+          p_department: me.department,
+        });
+      } catch (err) {
+        console.warn('[markAllNotificationsRead] remote failed:', err);
+      }
     }
   },
 
