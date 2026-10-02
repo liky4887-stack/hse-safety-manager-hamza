@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, FlatList, RefreshControl } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, FlatList, RefreshControl, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { ShieldCheck, AlertTriangle, Filter, X, FileText } from 'lucide-react-native';
+import { ShieldCheck, AlertTriangle, Filter, X, FileText, Trash2 } from 'lucide-react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { useI18n } from '@/hooks/useI18n';
 import { useStore } from '@/store';
@@ -23,6 +23,7 @@ export default function ReportsScreen() {
   const { t, lang } = useI18n();
   const user = useStore((s) => s.user);
   const reports = useStore((s) => s.reports);
+  const softDeleteReport = useStore((s) => s.softDeleteReport);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -34,9 +35,20 @@ export default function ReportsScreen() {
 
   const userReports = useMemo(() => {
     if (!user) return [];
+    // Top-level roles see everything
     if (user.role === 'admin' || user.role === 'hse_officer') return reports;
+    // Supervisors see all reports in their own department
+    if (user.role === 'supervisor') {
+      return reports.filter((r) => r.department === user.department);
+    }
+    // Employees / technicians see only their own
     return reports.filter((r) => r.createdBy === user.id || r.assignedTo === user.id);
   }, [reports, user]);
+
+  // Who can delete reports?
+  const canManage = user?.role === 'supervisor' ||
+                    user?.role === 'admin' ||
+                    user?.role === 'hse_officer';
 
   const filteredReports = useMemo(() => {
     return userReports.filter((r) => {
@@ -53,6 +65,23 @@ export default function ReportsScreen() {
   };
 
   const activeFilters = (filterType !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0) + (filterDept !== 'all' ? 1 : 0);
+
+  const handleDelete = (report: typeof filteredReports[0]) => {
+    Alert.alert(
+      lang === 'ar' ? 'تأكيد الحذف' : 'Confirm delete',
+      lang === 'ar'
+        ? 'هل أنت متأكد من حذف هذا التقرير؟ سيختفي من التطبيق ولوحة القسم.'
+        : 'Delete this report? It will disappear from the app and department dashboard.',
+      [
+        { text: lang === 'ar' ? 'إلغاء' : 'Cancel', style: 'cancel' },
+        {
+          text: lang === 'ar' ? 'حذف' : 'Delete',
+          style: 'destructive',
+          onPress: () => { void softDeleteReport(report.id); },
+        },
+      ]
+    );
+  };
 
   const renderItem = ({ item, index }: { item: typeof filteredReports[0]; index: number }) => (
     <Animated.View entering={FadeInDown.delay(index * 50).duration(400)}>
@@ -97,6 +126,16 @@ export default function ReportsScreen() {
                 )}
               </View>
             </View>
+
+            {canManage && (
+              <TouchableOpacity
+                onPress={() => handleDelete(item)}
+                style={styles.deleteBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Trash2 size={18} color={colors.error} />
+              </TouchableOpacity>
+            )}
           </View>
         </LiquidGlassCard>
       </TouchableOpacity>
@@ -337,5 +376,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     marginTop: 4,
+  },
+  deleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
 });

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -47,6 +47,29 @@ export default function ProfileScreen() {
     );
   }
 
+  // ── Hidden dashboard access ──
+  // Triple-tap the name within 1.5s OR long-press for 800ms opens the dashboard login.
+  const tapCountRef = useRef(0);
+  const lastTapRef = useRef(0);
+
+  const openDashboard = () => {
+    tapCountRef.current = 0;
+    router.push('/dashboard/index');
+  };
+
+  const handleSecretTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current > 1500) {
+      tapCountRef.current = 0;
+    }
+    tapCountRef.current += 1;
+    lastTapRef.current = now;
+
+    if (tapCountRef.current >= 3) {
+      openDashboard();
+    }
+  };
+
   const role = ROLES.find((r) => r.id === user.role);
   const dept = DEPARTMENTS.find((d) => d.id === user.department);
   const ForwardIcon = rtl ? ChevronLeft : ChevronRight;
@@ -72,7 +95,14 @@ export default function ProfileScreen() {
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
             <Text style={[styles.avatarText, { color: colors.textOnPrimary }]}>{user.name.charAt(0).toUpperCase()}</Text>
           </View>
-          <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
+          <TouchableOpacity
+            onPress={handleSecretTap}
+            onLongPress={openDashboard}
+            delayLongPress={800}
+            activeOpacity={1}
+          >
+            <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
+          </TouchableOpacity>
           <View style={[styles.roleBadge, { backgroundColor: colors.primary + '15', borderColor: colors.primary }]}>
             {role && roleIcons[role.icon]?.(colors.primary)}
             <Text style={[styles.roleText, { color: colors.primary }]}>

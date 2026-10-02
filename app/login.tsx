@@ -29,6 +29,7 @@ export default function LoginScreen() {
   const [selectedDept, setSelectedDept] = React.useState<string>('');
   const [lookingUp, setLookingUp] = React.useState(false);
   const [foundProfile, setFoundProfile] = React.useState(false);
+  const [locked, setLocked] = React.useState(false);
 
   const trimmedName = name.trim();
   const showRole = trimmedName.length > 0;
@@ -39,6 +40,7 @@ export default function LoginScreen() {
   React.useEffect(() => {
     if (trimmedName.length < 1) {
       setFoundProfile(false);
+      setLocked(false);
       return;
     }
     const handle = setTimeout(async () => {
@@ -49,6 +51,7 @@ export default function LoginScreen() {
         setSelectedRole(profile.role);
         setSelectedDept(profile.department);
         setFoundProfile(true);
+        setLocked(true);
       } else {
         setFoundProfile(false);
       }
@@ -114,11 +117,24 @@ export default function LoginScreen() {
             {lookingUp && <ActivityIndicator size="small" color={colors.primary} />}
           </View>
           {foundProfile && (
-            <Text style={[styles.hint, { color: colors.success }]}>
-              {lang === 'ar'
-                ? 'تم التعرف عليك — تم تعبئة البيانات تلقائياً'
-                : 'Recognized — fields auto-filled'}
-            </Text>
+            <View style={styles.hintRow}>
+              <Text style={[styles.hint, { color: colors.success }]}>
+                {lang === 'ar'
+                  ? 'تم التعرف عليك — تم تعبئة البيانات تلقائياً'
+                  : 'Recognized — fields auto-filled'}
+              </Text>
+              {locked && (
+                <TouchableOpacity
+                  onPress={() => setLocked(false)}
+                  style={styles.changeBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={[styles.changeText, { color: colors.primary }]}>
+                    {lang === 'ar' ? 'تغيير' : 'Change'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </Animated.View>
 
@@ -132,8 +148,9 @@ export default function LoginScreen() {
                 return (
                   <TouchableOpacity
                     key={role.id}
-                    onPress={() => setSelectedRole(role.id)}
-                    activeOpacity={0.85}
+                    onPress={() => !locked && setSelectedRole(role.id)}
+                    activeOpacity={locked ? 1 : 0.85}
+                  disabled={locked}
                     style={[
                       styles.roleCard,
                       {
@@ -166,14 +183,16 @@ export default function LoginScreen() {
                 return (
                   <TouchableOpacity
                     key={dept.id}
-                    onPress={() => setSelectedDept(dept.id)}
-                    activeOpacity={0.85}
+                    onPress={() => !locked && setSelectedDept(dept.id)}
+                    activeOpacity={locked ? 1 : 0.85}
+                    disabled={locked}
                     style={[
                       styles.deptChip,
                       {
                         backgroundColor: isSelected ? colors.primary + '14' : colors.surface,
                         borderColor: isSelected ? colors.primary : colors.border,
                         borderWidth: isSelected ? 1.5 : 1,
+                        opacity: locked && !isSelected ? 0.4 : 1,
                       },
                     ]}
                   >
@@ -278,6 +297,23 @@ const styles = StyleSheet.create({
     padding: 0,
     minHeight: 24,
     flex: 1,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 6,
+  },
+  changeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  changeText: {
+    fontFamily: 'Cairo-Bold',
+    fontSize: 12,
+    textDecorationLine: 'underline',
   },
   hint: {
     fontFamily: 'Cairo-Regular',

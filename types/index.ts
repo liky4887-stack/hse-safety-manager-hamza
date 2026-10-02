@@ -29,6 +29,13 @@ export interface ReportLocation {
 }
 
 export interface Report {
+  // Approval workflow
+  approved: boolean;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  // Dual soft-delete — one per dashboard
+  deletedAtDept: string | null;   // hidden from department dashboard only
+  deletedAtMain: string | null;   // hidden from main dashboard only
   id: string;
   type: ReportType;
   category: UnsafeCategory | null;
@@ -115,4 +122,20 @@ export interface RoleOption {
   nameAr: string;
   nameEn: string;
   icon: string;
+}
+
+
+// ── Dashboard layer ──
+export interface DashboardUser {
+  id: string;
+  username: string;
+  displayName: string;
+  department: string | null;   // null = super (all departments)
+  isSuper: boolean;
+}
+
+export interface DashboardSession {
+  token: string;
+  user: DashboardUser;
+  expiresAt: string;
 }

@@ -5,6 +5,8 @@ import type {
   UserRole,
   ROLE_UP,
   NOTIFY_PRIMARY,
+  DashboardUser,
+  DashboardSession,
   Report,
   AppNotification,
   Language,
@@ -27,6 +29,8 @@ const STORAGE_KEYS = {
   theme: '@hse_theme',
   lastPickedTheme: '@hse_last_picked_theme',
   hasSeenSplash: '@hse_has_seen_splash',
+  dashboardToken: '@hse_dashboard_token',
+  dashboardExpiresAt: '@hse_dashboard_expires_at',
 };
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -41,6 +45,14 @@ interface AppState {
   themeMode: ThemeMode;
   lastPickedTheme: 'light' | 'dark';
   hasSeenSplash: boolean;
+
+  // Dashboard session (independent of the app user)
+  dashboardUser: DashboardUser | null;
+  dashboardToken: string | null;
+  dashboardTokenExpiresAt: string | null;
+  loginDashboard: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  logoutDashboard: () => Promise<void>;
+  verifyDashboardSession: () => Promise<boolean>;
   initialized: boolean;
 
   init: () => Promise<void>;
@@ -76,6 +88,15 @@ interface AppState {
   hydrateFromSupabase: () => Promise<void>;
   hydrateNotifications: () => Promise<void>;
   retryPendingSync: () => Promise<void>;
+  softDeleteReport: (clientId: string) => Promise<void>;
+
+  // Dashboard actions (require dashboardUser set)
+  approveReport: (clientId: string) => Promise<void>;
+  deleteReportFromDept: (clientId: string) => Promise<void>;
+  deleteReportFromMain: (clientId: string) => Promise<void>;
+  restoreReportFromDept: (clientId: string) => Promise<void>;
+  restoreReportFromMain: (clientId: string) => Promise<void>;
+  pushDashboardNotification: (report: Report, user: User) => Promise<void>;
   saveProfile: (name: string, role: UserRole, department: string) => Promise<void>;
   lookupProfile: (name: string) => Promise<{ role: UserRole; department: string } | null>;
   markSplashSeen: () => Promise<void>;
@@ -100,6 +121,9 @@ async function syncReportToSupabase(report: Report, user: User): Promise<void> {
       location_lat: report.location?.latitude ?? null,
       location_lng: report.location?.longitude ?? null,
       location_address: report.location?.address ?? null,
+      approved: true,
+      approved_at: report.createdAt,
+      approved_by: user.name,
       created_at: report.createdAt,
     });
     if (error) console.error('[sync] insert failed:', error);
@@ -127,6 +151,11 @@ function supabaseRowToReport(row: any): Report {
     createdByName: row.created_by_name || '',
     assignedTo: row.assigned_to ?? null,
     assignedToName: row.assigned_to_name ?? null,
+    approved: row.approved ?? true,
+    approvedAt: row.approved_at ?? null,
+    approvedBy: row.approved_by ?? null,
+    deletedAtDept: row.deleted_at_dept ?? null,
+    deletedAtMain: row.deleted_at_main ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
     closedAt: row.closed_at ?? null,
@@ -221,11 +250,14 @@ export const useStore = create<AppState>((set, get) => ({
   themeMode: 'light',
   lastPickedTheme: 'light',
   hasSeenSplash: false,
+  dashboardUser: null,
+  dashboardToken: null,
+  dashboardTokenExpiresAt: null,
   initialized: false,
 
   init: async () => {
     try {
-      const [userStr, reportsStr, notifStr, langStr, themeStr, lastPickedStr, seenSplashStr] = await Promise.all([
+      const [userStr, reportsStr, notifStr, langStr, themeStr, lastPickedStr, seenSplashStr, dashTokenStr, dashExpiresStr] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.user),
         AsyncStorage.getItem(STORAGE_KEYS.reports),
         AsyncStorage.getItem(STORAGE_KEYS.notifications),
@@ -233,6 +265,8 @@ export const useStore = create<AppState>((set, get) => ({
         AsyncStorage.getItem(STORAGE_KEYS.theme),
         AsyncStorage.getItem(STORAGE_KEYS.lastPickedTheme),
         AsyncStorage.getItem(STORAGE_KEYS.hasSeenSplash),
+        AsyncStorage.getItem(STORAGE_KEYS.dashboardToken),
+        AsyncStorage.getItem(STORAGE_KEYS.dashboardExpiresAt),
       ]);
 
       // Default to light theme. Only 'dark' is respected.
@@ -253,6 +287,8 @@ export const useStore = create<AppState>((set, get) => ({
         themeMode: resolvedTheme,
         lastPickedTheme: (lastPickedStr === 'dark' ? 'dark' : 'light') as 'light' | 'dark',
         hasSeenSplash: seenSplashStr === 'true',
+        dashboardToken: dashTokenStr || null,
+        dashboardTokenExpiresAt: dashExpiresStr || null,
         initialized: true,
       });
 
@@ -350,6 +386,26 @@ export const useStore = create<AppState>((set, get) => ({
 
 
 
+
+  softDeleteReport: async (clientId) => {
+    // Optimistic local removal
+    set((state) => ({ reports: state.reports.filter((r) => r.id !== clientId) }));
+    // Server-side soft delete (dept scope) — hides from app + dept dashboard,
+    // still visible in main dashboard
+    const nowIso = new Date().toISOString();
+    const { error } = await supabase
+      .from('hse_reports')
+      .update({ deleted_at_dept: nowIso, updated_at: nowIso })
+      .eq('client_id', clientId);
+    if (error) {
+      console.warn('[softDeleteReport] failed:', error.message);
+      // Reload to resync on failure
+      void get().hydrateFromSupabase();
+    } else {
+      console.log('[softDeleteReport] hidden', clientId);
+    }
+  },
+
   retryPendingSync: async () => {
     const pending = await getPendingSync();
     if (pending.length === 0) return;
@@ -408,10 +464,15 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       const rows = data ?? [];
-      const liveRows = rows.filter((r: any) => !r.deleted_at);
+      // A report is hidden from the app if it was soft-deleted globally
+      // OR hidden from its department. Main-dashboard-only hides do not
+      // affect the app view.
+      const liveRows = rows.filter(
+        (r: any) => !r.deleted_at && !r.deleted_at_dept
+      );
       const deletedIds = new Set(
         rows
-          .filter((r: any) => r.deleted_at && r.client_id)
+          .filter((r: any) => (r.deleted_at || r.deleted_at_dept) && r.client_id)
           .map((r: any) => r.client_id as string),
       );
 
@@ -480,6 +541,223 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+
+  // ════════════════════════════════════════════════════════
+  // DASHBOARD LAYER
+  // ════════════════════════════════════════════════════════
+
+  loginDashboard: async (username, password) => {
+    try {
+      const { data, error } = await supabase.rpc('create_dashboard_session', {
+        p_username: username,
+        p_password: password,
+        p_ttl_hours: 4,
+      });
+
+      if (error) {
+        console.warn('[loginDashboard] rpc error:', error.message);
+        return { ok: false, error: 'server' };
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row || !row.token) {
+        return { ok: false, error: 'invalid' };
+      }
+
+      const sessionUser: DashboardUser = {
+        id: row.username,               // rpc doesn't return id, use username as identity
+        username: row.username,
+        displayName: row.display_name || row.username,
+        department: row.department ?? null,
+        isSuper: !!row.is_super,
+      };
+
+      await AsyncStorage.setItem(STORAGE_KEYS.dashboardToken, row.token);
+      await AsyncStorage.setItem(STORAGE_KEYS.dashboardExpiresAt, row.expires_at);
+
+      set({
+        dashboardUser: sessionUser,
+        dashboardToken: row.token,
+        dashboardTokenExpiresAt: row.expires_at,
+      });
+
+      console.log('[loginDashboard] OK as', row.username, 'super=', row.is_super);
+      return { ok: true };
+    } catch (err) {
+      console.warn('[loginDashboard] unexpected:', err);
+      return { ok: false, error: 'network' };
+    }
+  },
+
+  logoutDashboard: async () => {
+    const token = get().dashboardToken;
+    if (token) {
+      try {
+        await supabase.rpc('destroy_dashboard_session', { p_token: token });
+      } catch (err) {
+        console.warn('[logoutDashboard] rpc failed:', err);
+      }
+    }
+    await AsyncStorage.removeItem(STORAGE_KEYS.dashboardToken);
+    await AsyncStorage.removeItem(STORAGE_KEYS.dashboardExpiresAt);
+    set({ dashboardUser: null, dashboardToken: null, dashboardTokenExpiresAt: null });
+    console.log('[logoutDashboard] cleared');
+  },
+
+  verifyDashboardSession: async () => {
+    const token = get().dashboardToken;
+    if (!token) return false;
+
+    try {
+      const { data, error } = await supabase.rpc('verify_dashboard_session', { p_token: token });
+      if (error) {
+        console.warn('[verifyDashboardSession] rpc error:', error.message);
+        await get().logoutDashboard();
+        return false;
+      }
+
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) {
+        // expired or invalid
+        await get().logoutDashboard();
+        return false;
+      }
+
+      const sessionUser: DashboardUser = {
+        id: row.username,
+        username: row.username,
+        displayName: row.display_name || row.username,
+        department: row.department ?? null,
+        isSuper: !!row.is_super,
+      };
+
+      set({
+        dashboardUser: sessionUser,
+        dashboardTokenExpiresAt: row.expires_at,
+      });
+      return true;
+    } catch (err) {
+      console.warn('[verifyDashboardSession] unexpected:', err);
+      await get().logoutDashboard();
+      return false;
+    }
+  },
+
+  approveReport: async (clientId) => {
+    const dUser = get().dashboardUser;
+    if (!dUser) { console.warn('[approveReport] no dashboard user'); return; }
+
+    const nowIso = new Date().toISOString();
+
+    // Optimistic local update
+    set((state) => ({
+      reports: state.reports.map((r) =>
+        r.id === clientId
+          ? { ...r, approved: true, approvedAt: nowIso, approvedBy: dUser.username, updatedAt: nowIso }
+          : r
+      ),
+    }));
+
+    const { error } = await supabase
+      .from('hse_reports')
+      .update({
+        approved: true,
+        approved_at: nowIso,
+        approved_by: dUser.username,
+        updated_at: nowIso,
+      })
+      .eq('client_id', clientId);
+
+    if (error) console.warn('[approveReport] failed:', error.message);
+    else console.log('[approveReport] approved', clientId);
+  },
+
+  deleteReportFromDept: async (clientId) => {
+    const dUser = get().dashboardUser;
+    if (!dUser || dUser.isSuper) { console.warn('[deleteReportFromDept] not allowed'); return; }
+
+    const nowIso = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('hse_reports')
+      .update({ deleted_at_dept: nowIso, updated_at: nowIso })
+      .eq('client_id', clientId);
+
+    if (error) console.warn('[deleteReportFromDept] failed:', error.message);
+    else console.log('[deleteReportFromDept] hidden from', dUser.department, '·', clientId);
+  },
+
+  deleteReportFromMain: async (clientId) => {
+    const dUser = get().dashboardUser;
+    if (!dUser || !dUser.isSuper) { console.warn('[deleteReportFromMain] not allowed'); return; }
+
+    const nowIso = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('hse_reports')
+      .update({ deleted_at_main: nowIso, updated_at: nowIso })
+      .eq('client_id', clientId);
+
+    if (error) console.warn('[deleteReportFromMain] failed:', error.message);
+    else console.log('[deleteReportFromMain] hidden from main ·', clientId);
+  },
+
+  restoreReportFromDept: async (clientId) => {
+    const dUser = get().dashboardUser;
+    if (!dUser || dUser.isSuper) return;
+
+    const { error } = await supabase
+      .from('hse_reports')
+      .update({ deleted_at_dept: null, updated_at: new Date().toISOString() })
+      .eq('client_id', clientId);
+
+    if (error) console.warn('[restoreReportFromDept] failed:', error.message);
+  },
+
+  restoreReportFromMain: async (clientId) => {
+    const dUser = get().dashboardUser;
+    if (!dUser || !dUser.isSuper) return;
+
+    const { error } = await supabase
+      .from('hse_reports')
+      .update({ deleted_at_main: null, updated_at: new Date().toISOString() })
+      .eq('client_id', clientId);
+
+    if (error) console.warn('[restoreReportFromMain] failed:', error.message);
+  },
+
+  pushDashboardNotification: async (report, user) => {
+    // Dashboard admins get a copy flagged for_dashboard = true
+    const supabaseType =
+      report.type === 'safe'
+        ? 'safe'
+        : report.category === 'act'
+        ? 'unsafe_act'
+        : 'unsafe_condition';
+
+    const titleAr = 'تقرير جديد';
+    const body = `${user.name}: ${report.description.slice(0, 60)}${report.description.length > 60 ? '…' : ''}`;
+
+    const { error } = await supabase.from('notifications').insert({
+      report_id: report.id,
+      report_type: supabaseType,
+      title: titleAr,
+      body,
+      recipient_role: 'admin',
+      recipient_department: user.department,
+      sender_name: user.name,
+      sender_role: user.role,
+      sender_department: user.department,
+      for_dashboard: true,
+    });
+
+    if (error && error.code !== '23505') {
+      console.warn('[pushDashboardNotification] failed:', error.message);
+    } else {
+      console.log('[pushDashboardNotification] dashboard notified for', user.department);
+    }
+  },
+
   login: async (name, role, department) => {
     const user: User = {
       id: generateId(),
@@ -538,6 +816,11 @@ export const useStore = create<AppState>((set, get) => ({
       status: data.status ?? (data.type === 'safe' ? 'closed' : 'open'),
       priority: data.priority ?? null,
       location: data.location ?? null,
+      approved: true,
+      approvedAt: now,
+      approvedBy: user.name,
+      deletedAtDept: null,
+      deletedAtMain: null,
       createdBy: user.id,
       createdByName: user.name,
       assignedTo: null,
@@ -579,6 +862,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     void syncReportToSupabase(report, user);
     void pushReportNotification(report, user);
+    void get().pushDashboardNotification(report, user);
 
     return report;
   },
