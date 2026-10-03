@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Image, Linking } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -103,7 +104,13 @@ export default function ReportDetailsScreen() {
         {report.photoUri && (
           <Animated.View entering={FadeInDown.delay(200).duration(500)}>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 8 }]}>{t.photo}</Text>
-            <Image source={{ uri: report.photoUri }} style={styles.photo} />
+            <ExpoImage
+              source={report.photoUri}
+              style={styles.photo}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+              transition={200}
+            />
           </Animated.View>
         )}
 

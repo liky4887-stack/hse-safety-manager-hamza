@@ -349,10 +349,15 @@ export const useStore = create<AppState>((set, get) => ({
       const currentUser = get().user;
       if (!notifChannel && currentUser) {
         notifChannel = supabase
-          .channel('notifications_sync')
+          .channel(`notifications_sync_${currentUser.department}`)
           .on(
             'postgres_changes',
-            { event: '*', schema: 'public', table: 'notifications' },
+            {
+              event: '*',
+              schema: 'public',
+              table: 'notifications',
+              filter: `recipient_department=eq.${currentUser.department}`,
+            },
             (payload: any) => {
               const evt = payload.eventType;
               const row = payload.new || payload.old;
@@ -505,7 +510,7 @@ export const useStore = create<AppState>((set, get) => ({
         .from('hse_reports')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(500);
+        .limit(50);
       if (error) {
         console.warn('[hydrate] failed:', error.message);
         return;

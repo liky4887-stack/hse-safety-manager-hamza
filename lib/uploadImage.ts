@@ -9,8 +9,8 @@ export async function uploadImage(uri: string, folder: string): Promise<string |
   try {
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 1200 } }],
-      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+      [{ resize: { width: 900 } }],
+      { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG }
     );
 
     const response = await fetch(manipulated.uri);
