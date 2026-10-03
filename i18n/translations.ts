@@ -153,7 +153,7 @@ export interface Translation {
 const ar: Translation = {
   appName: 'إدارة السلامة المهنية',
   appNameEn: 'HSE Safety Manager',
-  company: 'شركة الفيّاض للنفط',
+  company: 'فياض برقن للنفط',
   welcome: 'مرحباً',
   selectRole: 'اختر دورك',
   enterName: 'أدخل اسمك',
@@ -303,7 +303,7 @@ const ar: Translation = {
 const en: Translation = {
   appName: 'HSE Safety Manager',
   appNameEn: 'HSE Safety Manager',
-  company: 'Al-Fayyad Oil Company',
+  company: 'Fayadh Barqan Petroleum',
   welcome: 'Welcome',
   selectRole: 'Select Your Role',
   enterName: 'Enter your name',

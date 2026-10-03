@@ -11,8 +11,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const NAME_AR = 'شركة الفياض للنفط';
-const NAME_EN = 'Al Fayadh Petroleum';
+const NAME_AR = 'فياض برقن للنفط';
+const NAME_EN = 'Fayadh Barqan Petroleum';
 const CRIMSON = '#E5284B';
 
 

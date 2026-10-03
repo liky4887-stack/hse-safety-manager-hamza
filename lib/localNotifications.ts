@@ -1,29 +1,71 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// Configure how notifications are shown while the app is foregrounded
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+/**
+ * expo-notifications crashes at import time in Expo Go on Android (SDK 53+)
+ * because remote push was removed from Expo Go. We work around it by loading
+ * the module lazily with require() and skipping it entirely in Expo Go.
+ *
+ * In dev builds / standalone APKs (EAS preview / production), the module
+ * loads normally and notifications work.
+ */
+
+// Detect Expo Go — modern API, falls back to legacy appOwnership
+function isExpoGo(): boolean {
+  try {
+    // `appOwnership === 'expo'` is deprecated but still works
+    // @ts-ignore
+    return Constants.appOwnership === 'expo';
+  } catch {
+    return false;
+  }
+}
+
+let Notifications: any = null;
+let initialized = false;
+
+function loadNotifications(): any {
+  if (initialized) return Notifications;
+  initialized = true;
+
+  // On Android Expo Go, skip entirely — importing crashes.
+  if (isExpoGo() && Platform.OS === 'android') {
+    console.log('[localNotifications] Expo Go (Android) — notifications disabled');
+    return null;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    Notifications = require('expo-notifications');
+
+    // Foreground behaviour
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  } catch (err) {
+    console.warn('[localNotifications] module load failed:', err);
+    Notifications = null;
+  }
+  return Notifications;
+}
 
 let channelReady = false;
 
-/**
- * Ask for notification permission and set up the Android channel.
- * Safe to call multiple times — it's a no-op after the first success.
- */
 export async function ensureNotificationSetup(): Promise<boolean> {
+  const N = loadNotifications();
+  if (!N) return false;
+
   try {
     if (Platform.OS === 'android' && !channelReady) {
-      await Notifications.setNotificationChannelAsync('hse-reports', {
+      await N.setNotificationChannelAsync('hse-reports', {
         name: 'HSE Reports',
-        importance: Notifications.AndroidImportance.HIGH,
+        importance: N.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#E5284B',
         sound: 'default',
@@ -31,10 +73,10 @@ export async function ensureNotificationSetup(): Promise<boolean> {
       channelReady = true;
     }
 
-    const { status: existing } = await Notifications.getPermissionsAsync();
+    const { status: existing } = await N.getPermissionsAsync();
     if (existing === 'granted') return true;
 
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await N.requestPermissionsAsync();
     return status === 'granted';
   } catch (err) {
     console.warn('[localNotifications] setup failed:', err);
@@ -42,16 +84,16 @@ export async function ensureNotificationSetup(): Promise<boolean> {
   }
 }
 
-/**
- * Fire an immediate OS notification (banner + vibration + sound).
- */
 export async function showReportNotification(opts: {
   title: string;
   body: string;
   reportId: string;
 }): Promise<void> {
+  const N = loadNotifications();
+  if (!N) return;
+
   try {
-    await Notifications.scheduleNotificationAsync({
+    await N.scheduleNotificationAsync({
       content: {
         title: opts.title,
         body: opts.body,
@@ -59,7 +101,7 @@ export async function showReportNotification(opts: {
         data: { reportId: opts.reportId },
         ...(Platform.OS === 'android' ? { channelId: 'hse-reports' } : {}),
       },
-      trigger: null, // immediate
+      trigger: null,
     });
   } catch (err) {
     console.warn('[localNotifications] fire failed:', err);

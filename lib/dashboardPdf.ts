@@ -558,7 +558,7 @@ export async function generateDashboardPdf(input: PdfInput): Promise<string> {
   </table>
 
   <div class="footer">
-    ${ar ? 'شركة الفياض للنفط — إدارة السلامة المهنية' : 'Al Fayadh Petroleum — HSE Department'}
+    ${ar ? 'فياض برقن للنفط — إدارة السلامة المهنية' : 'Fayadh Barqan Petroleum — HSE Department'}
     · ${ar ? 'نظام إدارة السلامة' : 'HSE Safety Manager'}
   </div>
 

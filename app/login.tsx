@@ -43,12 +43,18 @@ export default function LoginScreen() {
 
   // Auto-lookup profile after 600ms of no typing
   React.useEffect(() => {
+    // Reset EVERYTHING on every name change — prevents leaked state
+    // from a previously-recognized profile.
+    setSelectedRole(null);
+    setSelectedDept('');
+    setSelectedSubcategory('');
+    setFoundProfile(false);
+    setLocked(false);
+
     if (trimmedName.length < 1) {
-      setFoundProfile(false);
-      setLocked(false);
-      setSelectedSubcategory('');
       return;
     }
+
     const handle = setTimeout(async () => {
       setLookingUp(true);
       const profile = await lookupProfile(trimmedName);
@@ -59,8 +65,6 @@ export default function LoginScreen() {
         setSelectedSubcategory(profile.subcategory ?? '');
         setFoundProfile(true);
         setLocked(true);
-      } else {
-        setFoundProfile(false);
       }
     }, 600);
     return () => clearTimeout(handle);

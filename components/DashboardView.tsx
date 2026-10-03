@@ -87,7 +87,7 @@ export function DashboardView({ mode, department, group }: Props) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [mode, department]);
+  }, [mode, department, group]);
 
   // Initial load
   useEffect(() => { load(); }, [load]);
