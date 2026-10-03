@@ -19,6 +19,7 @@ import { ROLE_UP, NOTIFY_PRIMARY } from '@/types';
 import { DEPARTMENTS } from '@/config/departments';
 import { supabase } from '@/lib/supabase';
 import { uploadImage } from '@/lib/uploadImage';
+import { ensureNotificationSetup, showReportNotification } from '@/lib/localNotifications';
 
 const STORAGE_KEYS = {
   user: '@hse_user',
@@ -225,7 +226,9 @@ async function clearPendingSync(reportId: string): Promise<void> {
 }
 
 async function pushReportNotification(report: Report, user: User): Promise<void> {
-  const primaryTarget = NOTIFY_PRIMARY[user.role];
+  // HSE supervisors (role = hse_officer OR department = health_safety) broadcast to all departments
+  const isHseBroadcast =
+    user.role === 'hse_officer' || user.department === 'health_safety';
 
   const supabaseType =
     report.type === 'safe'
@@ -234,27 +237,50 @@ async function pushReportNotification(report: Report, user: User): Promise<void>
       ? 'unsafe_act'
       : 'unsafe_condition';
 
-  const titleAr = report.type === 'safe' ? 'تقرير وضع آمن جديد' : 'تقرير وضع غير آمن جديد';
+  const titleAr = isHseBroadcast
+    ? '🔔 إشعار من الصحة والسلامة'
+    : report.type === 'safe'
+    ? 'تقرير وضع آمن جديد'
+    : 'تقرير وضع غير آمن جديد';
+
   const body = report.description.slice(0, 80) + (report.description.length > 80 ? '…' : '');
 
-  const { error } = await supabase.rpc('insert_notification', {
-    p_report_id: report.id,
-    p_report_type: supabaseType,
-    p_title: titleAr,
-    p_body: body,
-    p_recipient_role: primaryTarget,
-    p_recipient_department: user.department,
-    p_sender_name: user.name,
-    p_sender_role: user.role,
-    p_sender_department: user.department,
-    p_for_dashboard: false,
-  });
+  // Target departments: all if HSE broadcast, otherwise sender's department
+  const targetDepartments: string[] = isHseBroadcast
+    ? DEPARTMENTS.map((d) => d.id)
+    : [user.department];
 
-  if (error) {
-    console.warn('[pushReportNotification] failed:', error.message);
-    throw error;
+  const targetRole = isHseBroadcast ? 'all' : NOTIFY_PRIMARY[user.role];
+
+  let okCount = 0;
+  for (const deptId of targetDepartments) {
+    const { error } = await supabase.rpc('insert_notification', {
+      p_report_id: report.id,
+      p_report_type: supabaseType,
+      p_title: titleAr,
+      p_body: body,
+      p_recipient_role: targetRole,
+      p_recipient_department: deptId,
+      p_sender_name: user.name,
+      p_sender_role: user.role,
+      p_sender_department: user.department,
+      p_for_dashboard: false,
+    });
+    if (error) {
+      console.warn('[pushReportNotification] failed for', deptId, ':', error.message);
+    } else {
+      okCount++;
+    }
   }
-  console.log('[pushReportNotification] ok for', user.department);
+  console.log(
+    '[pushReportNotification]',
+    isHseBroadcast ? 'BROADCAST' : 'local',
+    '→',
+    okCount,
+    '/',
+    targetDepartments.length,
+    'departments',
+  );
 }
 
 
@@ -340,6 +366,12 @@ export const useStore = create<AppState>((set, get) => ({
                 set((state) => {
                   if (state.notifications.some((x) => x.id === n.id)) return state;
                   return { notifications: [n, ...state.notifications] };
+                });
+                // Also fire a local OS notification for realtime arrivals
+                void showReportNotification({
+                  title: n.title,
+                  body: n.body,
+                  reportId: n.reportId,
                 });
               } else if (evt === 'UPDATE') {
                 const n = supabaseRowToNotification(row);
@@ -856,6 +888,17 @@ export const useStore = create<AppState>((set, get) => ({
         body: 'Safe condition documented for review',
       });
     }
+
+    // Fire a local OS notification on the sender's device
+    void ensureNotificationSetup().then((granted) => {
+      if (granted) {
+        void showReportNotification({
+          title: data.type === 'safe' ? 'تقرير وضع آمن' : 'تقرير وضع غير آمن',
+          body: report.description.slice(0, 80),
+          reportId: report.id,
+        });
+      }
+    });
 
     void syncReportToSupabase(report, user);
     void pushReportNotification(report, user);

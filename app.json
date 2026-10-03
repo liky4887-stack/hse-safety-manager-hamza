@@ -41,6 +41,14 @@
     },
     "plugins": [
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#E5284B",
+          "defaultChannel": "hse-reports"
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-blank-light.png",
