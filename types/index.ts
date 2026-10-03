@@ -132,6 +132,7 @@ export interface DashboardUser {
   username: string;
   displayName: string;
   department: string | null;   // null = super (all departments)
+  subcategory: string | null;  // set for drilling group supervisors
   isSuper: boolean;
 }
 

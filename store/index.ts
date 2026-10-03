@@ -626,6 +626,7 @@ export const useStore = create<AppState>((set, get) => ({
         username: row.username,
         displayName: row.display_name || row.username,
         department: row.department ?? null,
+        subcategory: row.subcategory ?? null,
         isSuper: !!row.is_super,
       };
 
@@ -685,6 +686,7 @@ export const useStore = create<AppState>((set, get) => ({
         username: row.username,
         displayName: row.display_name || row.username,
         department: row.department ?? null,
+        subcategory: row.subcategory ?? null,
         isSuper: !!row.is_super,
       };
 

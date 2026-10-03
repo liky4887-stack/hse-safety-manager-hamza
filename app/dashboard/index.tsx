@@ -28,6 +28,9 @@ export default function DashboardIndex() {
         router.replace('/dashboard/login');
       } else if (me.isSuper) {
         router.replace('/dashboard/main');
+      } else if (me.department === 'drilling' && me.subcategory) {
+        // Drilling supervisor → dedicated group dashboard
+        router.replace(`/dashboard/drilling/${me.subcategory}`);
       } else if (me.department) {
         router.replace(`/dashboard/${me.department}`);
       } else {

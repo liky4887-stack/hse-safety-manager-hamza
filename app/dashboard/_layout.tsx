@@ -8,6 +8,7 @@ export default function DashboardLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="main" />
       <Stack.Screen name="[dept]" />
+      <Stack.Screen name="drilling/[group]" />
     </Stack>
   );
 }

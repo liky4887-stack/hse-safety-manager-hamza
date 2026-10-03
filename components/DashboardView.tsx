@@ -25,6 +25,7 @@ type Tab = 'all' | 'open' | 'closed' | 'analytics';
 interface Props {
   mode: Mode;
   department?: string | null;
+  group?: string | null;   // drilling sub-group (group_1 .. group_12)
 }
 
 interface Row {
@@ -45,7 +46,7 @@ interface Row {
   image_url: string | null;
 }
 
-export function DashboardView({ mode, department }: Props) {
+export function DashboardView({ mode, department, group }: Props) {
   const { colors } = useTheme();
   const { lang } = useI18n();
   const router = useRouter();
@@ -67,7 +68,10 @@ export function DashboardView({ mode, department }: Props) {
         .order('created_at', { ascending: false })
         .limit(500);
 
-      if (mode === 'dept' && department) {
+      if (group) {
+        // Drilling group dashboard — only that group's reports
+        q = q.eq('department', 'drilling').eq('author_group', group);
+      } else if (mode === 'dept' && department) {
         q = q.eq('department', department).is('deleted_at_dept', null);
       } else {
         q = q.is('deleted_at_main', null);
