@@ -27,6 +27,7 @@ export default function LoginScreen() {
   const [name, setName] = React.useState('');
   const [selectedRole, setSelectedRole] = React.useState<UserRole | null>(null);
   const [selectedDept, setSelectedDept] = React.useState<string>('');
+  const [selectedSubcategory, setSelectedSubcategory] = React.useState<string>('');
   const [lookingUp, setLookingUp] = React.useState(false);
   const [foundProfile, setFoundProfile] = React.useState(false);
   const [locked, setLocked] = React.useState(false);
@@ -34,13 +35,18 @@ export default function LoginScreen() {
   const trimmedName = name.trim();
   const showRole = trimmedName.length > 0;
   const showDept = showRole && selectedRole !== null;
-  const canLogin = showDept && selectedDept.length > 0;
+  const showSubcat = showDept && selectedDept === 'drilling';
+  const canLogin =
+    showDept &&
+    selectedDept.length > 0 &&
+    (!showSubcat || selectedSubcategory.length > 0);
 
   // Auto-lookup profile after 600ms of no typing
   React.useEffect(() => {
     if (trimmedName.length < 1) {
       setFoundProfile(false);
       setLocked(false);
+      setSelectedSubcategory('');
       return;
     }
     const handle = setTimeout(async () => {
@@ -50,6 +56,7 @@ export default function LoginScreen() {
       if (profile) {
         setSelectedRole(profile.role);
         setSelectedDept(profile.department);
+        setSelectedSubcategory(profile.subcategory ?? '');
         setFoundProfile(true);
         setLocked(true);
       } else {
@@ -61,8 +68,9 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!canLogin) return;
-    await saveProfile(trimmedName, selectedRole!, selectedDept);
-    await login(trimmedName, selectedRole!, selectedDept);
+    const sub = selectedDept === 'drilling' ? selectedSubcategory : null;
+    await saveProfile(trimmedName, selectedRole!, selectedDept, sub);
+    await login(trimmedName, selectedRole!, selectedDept, sub);
     router.replace('/(tabs)');
   };
 
@@ -120,20 +128,9 @@ export default function LoginScreen() {
             <View style={styles.hintRow}>
               <Text style={[styles.hint, { color: colors.success }]}>
                 {lang === 'ar'
-                  ? 'تم التعرف عليك — تم تعبئة البيانات تلقائياً'
-                  : 'Recognized — fields auto-filled'}
+                  ? 'تم التعرف عليك — لا يمكن تغيير القسم أو الدور'
+                  : 'Recognized — role and department are locked'}
               </Text>
-              {locked && (
-                <TouchableOpacity
-                  onPress={() => setLocked(false)}
-                  style={styles.changeBtn}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={[styles.changeText, { color: colors.primary }]}>
-                    {lang === 'ar' ? 'تغيير' : 'Change'}
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
           )}
         </Animated.View>
@@ -209,6 +206,44 @@ export default function LoginScreen() {
           </Animated.View>
         )}
 
+        {/* Step 3b: Drilling group picker */}
+        {showSubcat && (
+          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+              {lang === 'ar' ? 'المجموعة' : 'Group'}
+            </Text>
+            <View style={styles.deptGrid}>
+              {(DEPARTMENTS.find((d) => d.id === 'drilling')?.subcategories ?? []).map((sub) => {
+                const isSelected = selectedSubcategory === sub.id;
+                return (
+                  <TouchableOpacity
+                    key={sub.id}
+                    onPress={() => !locked && setSelectedSubcategory(sub.id)}
+                    activeOpacity={locked ? 1 : 0.85}
+                    disabled={locked}
+                    style={[
+                      styles.deptChip,
+                      {
+                        backgroundColor: isSelected ? colors.primary + '14' : colors.surface,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                        borderWidth: isSelected ? 1.5 : 1,
+                        opacity: locked && !isSelected ? 0.4 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.deptText, { color: isSelected ? colors.primary : colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {lang === 'ar' ? sub.nameAr : sub.nameEn}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </Animated.View>
+        )}
+
         {/* Step 4: Login button — once everything is filled */}
         {canLogin && (
           <Animated.View entering={FadeInUp.duration(400)} style={styles.buttonWrap}>
@@ -224,7 +259,9 @@ export default function LoginScreen() {
                 ? (lang === 'ar' ? 'أدخل اسمك للمتابعة' : 'Enter your name to continue')
                 : !selectedRole
                 ? (lang === 'ar' ? 'اختر دورك للمتابعة' : 'Select your role to continue')
-                : (lang === 'ar' ? 'اختر القسم للمتابعة' : 'Select your department to continue')}
+                : !selectedDept
+                ? (lang === 'ar' ? 'اختر القسم للمتابعة' : 'Select your department to continue')
+                : (lang === 'ar' ? 'اختر المجموعة للمتابعة' : 'Select your group to continue')}
             </Text>
           </Animated.View>
         )}

@@ -17,6 +17,7 @@ export interface User {
   name: string;
   role: UserRole;
   department: string;
+  subcategory?: string | null;
   email: string;
   phone: string;
   avatar: string | null;

@@ -56,7 +56,7 @@ interface AppState {
   initialized: boolean;
 
   init: () => Promise<void>;
-  login: (name: string, role: User['role'], department: string) => Promise<void>;
+  login: (name: string, role: User['role'], department: string, subcategory?: string | null) => Promise<void>;
   logout: () => Promise<void>;
   setLanguage: (lang: Language) => Promise<void>;
   setThemeMode: (mode: ThemeMode) => Promise<void>;
@@ -97,8 +97,8 @@ interface AppState {
   restoreReportFromDept: (clientId: string) => Promise<void>;
   restoreReportFromMain: (clientId: string) => Promise<void>;
   pushDashboardNotification: (report: Report, user: User) => Promise<void>;
-  saveProfile: (name: string, role: UserRole, department: string) => Promise<void>;
-  lookupProfile: (name: string) => Promise<{ role: UserRole; department: string } | null>;
+  saveProfile: (name: string, role: UserRole, department: string, subcategory?: string | null) => Promise<void>;
+  lookupProfile: (name: string) => Promise<{ role: UserRole; department: string; subcategory: string | null } | null>;
   markSplashSeen: () => Promise<void>;
 }
 
@@ -135,6 +135,8 @@ async function syncReportToSupabase(report: Report, user: User): Promise<void> {
       p_location_lng: report.location?.longitude ?? null,
       p_location_address: report.location?.address ?? null,
       p_created_at: report.createdAt,
+      p_author_group:
+        user.department === 'drilling' ? (user.subcategory ?? null) : null,
     });
     if (error) {
       console.error('[sync] rpc failed:', error);
@@ -510,12 +512,23 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       const rows = data ?? [];
+      const me = get().user;
       // A report is hidden from the app if it was soft-deleted globally
       // OR hidden from its department. Main-dashboard-only hides do not
       // affect the app view.
-      const liveRows = rows.filter(
-        (r: any) => !r.deleted_at && !r.deleted_at_dept
-      );
+      // Drilling isolation: within the drilling department, users only see
+      // reports authored by their own group (author_group === user.subcategory).
+      const liveRows = rows.filter((r: any) => {
+        if (r.deleted_at || r.deleted_at_dept) return false;
+        if (
+          me &&
+          me.department === 'drilling' &&
+          r.department === 'drilling'
+        ) {
+          return r.author_group === me.subcategory;
+        }
+        return true;
+      });
       const deletedIds = new Set(
         rows
           .filter((r: any) => (r.deleted_at || r.deleted_at_dept) && r.client_id)
@@ -553,12 +566,13 @@ export const useStore = create<AppState>((set, get) => ({
     set({ hasSeenSplash: true });
   },
 
-  saveProfile: async (name, role, department) => {
+  saveProfile: async (name, role, department, subcategory) => {
     try {
       await supabase.rpc('upsert_hse_profile', {
         p_name: name,
         p_role: role,
         p_department: department,
+        p_subcategory: subcategory ?? null,
       });
     } catch (err) {
       console.warn('[saveProfile] failed:', err);
@@ -569,13 +583,14 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('hse_profiles')
-        .select('role, department')
+        .select('role, department, subcategory')
         .eq('name', name)
         .maybeSingle();
       if (error || !data) return null;
       return {
         role: data.role as UserRole,
         department: data.department as string,
+        subcategory: (data.subcategory as string | null) ?? null,
       };
     } catch (err) {
       console.warn('[lookupProfile] failed:', err);
@@ -789,12 +804,13 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  login: async (name, role, department) => {
+  login: async (name, role, department, subcategory) => {
     const user: User = {
       id: generateId(),
       name,
       role,
       department,
+      subcategory: subcategory ?? null,
       email: '',
       phone: '',
       avatar: null,
